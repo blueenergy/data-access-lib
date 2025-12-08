@@ -5,20 +5,29 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "stock-data-access"
 version = "0.1.0"
-description = "Reusable stock price data access layer for Mongo-backed OHLCV/minute bars"
+description = "Shared data access library for stock systems (Mongo, env, DAOs)"
 authors = [{ name = "blueenergy" }]
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
   "pandas>=2.0",
-  "pymongo>=4.0",
+  "pymongo>=4.5",
+  "python-dotenv>=1.0",
+]
+
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
 ]
 
 [project.urls]
-Homepage = "https://example.org/stock-data-access"
+Homepage = "https://github.com/blueenergy/data-access-lib"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["stock_data_access*"]
