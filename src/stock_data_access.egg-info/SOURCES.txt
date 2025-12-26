@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 src/stock_data_access/__init__.py
 src/stock_data_access/calendar.py
+src/stock_data_access/financial.py
 src/stock_data_access/index.py
 src/stock_data_access/loader.py
 src/stock_data_access/mongo_context.py
