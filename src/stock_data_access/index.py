@@ -15,14 +15,22 @@ class IndexDataAccess:
         docs = list(cursor)
         if not docs:
             stock_coll = self.db["volume_price"]
-            symbol = ts_code[:-3]
+            # Try with full symbol (with suffix) first, then without suffix
             stock_cursor = stock_coll.find(
-                {"symbol": symbol, "trade_date": {"$gte": start_date, "$lte": end_date}},
+                {"symbol": ts_code, "trade_date": {"$gte": start_date, "$lte": end_date}},
                 {"trade_date": 1, "close": 1},
             ).sort("trade_date", 1)
             docs = list(stock_cursor)
             if not docs:
-                return pd.Series(dtype=float, name=f"{ts_code}_norm")
+                # Fallback: try without suffix
+                symbol_without_suffix = ts_code.split('.')[0] if '.' in ts_code else ts_code
+                stock_cursor = stock_coll.find(
+                    {"symbol": symbol_without_suffix, "trade_date": {"$gte": start_date, "$lte": end_date}},
+                    {"trade_date": 1, "close": 1},
+                ).sort("trade_date", 1)
+                docs = list(stock_cursor)
+                if not docs:
+                    return pd.Series(dtype=float, name=f"{ts_code}_norm")
         df = pd.DataFrame(docs)
         ser = pd.Series(df["close"].values, index=pd.to_datetime(df["trade_date"], format="%Y%m%d"), name=ts_code)
         base = ser.iloc[0] if not ser.empty else None

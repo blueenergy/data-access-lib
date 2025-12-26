@@ -20,24 +20,25 @@ class StockPriceDataAccess:
         self.info_coll = self.db["stock_info"]
         self._sym_ts_cache: Dict[str, str] = {}
 
-    # -------- symbol <-> ts_code resolution --------
+    # -------- symbol resolution (now using symbol with suffix) --------
     def resolve_ts_code(self, symbol: str) -> Optional[str]:
         if symbol in self._sym_ts_cache:
             return self._sym_ts_cache[symbol]
-        doc = self.info_coll.find_one({"symbol": symbol}, {"ts_code": 1})
-        ts = doc.get("ts_code") if doc else None
-        if ts:
-            self._sym_ts_cache[symbol] = ts
-        return ts
+        doc = self.info_coll.find_one({"symbol": symbol}, {"symbol": 1})
+        # Now symbol field contains exchange suffix, so return the symbol itself
+        resolved_symbol = doc.get("symbol") if doc else None
+        if resolved_symbol:
+            self._sym_ts_cache[symbol] = resolved_symbol
+        return resolved_symbol
 
     def resolve_many(self, symbols: List[str]) -> Dict[str, Optional[str]]:
         missing = [s for s in symbols if s not in self._sym_ts_cache]
         if missing:
-            docs = list(self.info_coll.find({"symbol": {"$in": missing}}, {"symbol": 1, "ts_code": 1}))
+            docs = list(self.info_coll.find({"symbol": {"$in": missing}}, {"symbol": 1}))
             for d in docs:
-                ts = d.get("ts_code")
-                if ts:
-                    self._sym_ts_cache[d["symbol"]] = ts
+                resolved_symbol = d.get("symbol")
+                if resolved_symbol:
+                    self._sym_ts_cache[d["symbol"]] = resolved_symbol
         return {s: self._sym_ts_cache.get(s) for s in symbols}
 
     # -------- batch retrieval --------
@@ -90,24 +91,43 @@ class StockPriceDataAccess:
         return df.dropna(how="all")
 
     def fetch_latest_close(self, symbols: List[str], date_str: str) -> Dict[str, float]:
-        sym_ts = self.resolve_many(symbols)
-        ts_list = [ts for ts in sym_ts.values() if ts]
-        if not ts_list:
-            return {}
+        # Try to fetch with symbols (now with suffixes) first
         cursor = self.price_coll.find(
             {
-                "ts_code": {"$in": ts_list},
+                "symbol": {"$in": symbols},
                 "trade_date": date_str,
             },
-            {"ts_code": 1, "close": 1},
+            {"symbol": 1, "close": 1},
         )
         docs = list(cursor)
-        ts_to_symbol = {v: k for k, v in sym_ts.items() if v}
         result = {}
         for d in docs:
-            sym = ts_to_symbol.get(d.get("ts_code"))
+            sym = d.get("symbol")
             if sym:
                 result[sym] = d.get("close")
+        
+        # For symbols not found, try with stripped suffixes (backward compatibility)
+        found_symbols = set(result.keys())
+        symbols_not_found = [s for s in symbols if s not in found_symbols]
+        
+        if symbols_not_found:
+            # Strip suffixes from symbols not found
+            symbols_stripped = [s.split('.')[0] for s in symbols_not_found if '.' in s]
+            symbols_stripped.extend([s for s in symbols_not_found if '.' not in s])  # Add symbols without suffix
+            
+            cursor = self.price_coll.find(
+                {
+                    "symbol": {"$in": symbols_stripped},
+                    "trade_date": date_str,
+                },
+                {"symbol": 1, "close": 1},
+            )
+            docs = list(cursor)
+            for d in docs:
+                sym = d.get("symbol")
+                if sym:
+                    result[sym] = d.get("close")
+        
         return result
 
 
