@@ -61,9 +61,18 @@ class StockPriceDataAccess:
             "symbol": {"$in": symbols},
             "trade_date": {"$gte": start_date, "$lte": end_date},
         }
+        # Check if pct_chg field exists in the collection
+        sample_doc = self.price_coll.find_one(query)
+        has_pct_chg = sample_doc and "pct_chg" in sample_doc
+        
+        # Define projection based on whether pct_chg field exists
+        projection = {"symbol": 1, "trade_date": 1, "open": 1, "close": 1, "high": 1, "low": 1, "volume": 1}
+        if has_pct_chg:
+            projection["pct_chg"] = 1
+        
         cursor = self.price_coll.find(
             query,
-            {"symbol": 1, "trade_date": 1, "open": 1, "close": 1, "high": 1, "low": 1, "volume": 1},
+            projection,
         ).sort([("symbol", 1), ("trade_date", 1)])
         docs = list(cursor)
         grouped: Dict[str, List[dict]] = {}
@@ -78,7 +87,11 @@ class StockPriceDataAccess:
             # mixed will handle pure YYYYMMDD and YYYYMMDDHHMM by auto-detection
             dt_index = pd.to_datetime(df["trade_date"], format="mixed")
             df = df.set_index(dt_index).sort_index()
-            out[sym] = df[["open", "high", "low", "close", "volume"]]
+            # Include pct_chg column if it exists
+            columns = ["open", "high", "low", "close", "volume"]
+            if "pct_chg" in df.columns:
+                columns.append("pct_chg")
+            out[sym] = df[columns]
         return out
 
     def fetch_frame(self, symbols: List[str], start_date: str, end_date: str, forward_fill: bool = True) -> pd.DataFrame:
