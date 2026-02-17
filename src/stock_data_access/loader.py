@@ -144,4 +144,26 @@ class StockPriceDataAccess:
         return result
 
 
+    def fetch_market_spectrum(self, start_date: str, end_date: str) -> pd.DataFrame:
+        """Fetch market spectrum (Yin/Yang) data.
+        Returns DataFrame set index to trade_date (datetime).
+        Columns: yin_spectrum, yang_spectrum, total_stocks
+        """
+        coll = self.db["market_spectrum"]
+        cursor = coll.find(
+            {"trade_date": {"$gte": start_date, "$lte": end_date}},
+            {"trade_date": 1, "yin_spectrum": 1, "yang_spectrum": 1, "total_stocks": 1, "_id": 0}
+        ).sort("trade_date", 1)
+        
+        docs = list(cursor)
+        if not docs:
+            return pd.DataFrame()
+            
+        df = pd.DataFrame(docs)
+        # Convert YYYYMMDD string to datetime
+        df["trade_date"] = pd.to_datetime(df["trade_date"], format="mixed")
+        df = df.set_index("trade_date").sort_index()
+        return df
+
+
 __all__ = ["StockPriceDataAccess"]
