@@ -10,7 +10,7 @@ load_dotenv()
 
 _DEFAULT_URI = os.environ.get("MONGO_URI") or os.environ.get("MONGO_URL") or "mongodb://localhost:27017"
 _DEFAULT_DB = os.environ.get("DATA_DB_NAME", os.environ.get("MONGO_DB", "quant_data"))
-print("Using mongo uri", _DEFAULT_URI)
+
 def _build_client(uri: Optional[str] = None) -> MongoClient:
     use_mock = os.getenv("USE_MOCK_MONGO") in ("1", "true", "True")
     if use_mock:
