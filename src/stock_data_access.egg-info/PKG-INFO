@@ -1,13 +1,18 @@
 Metadata-Version: 2.4
 Name: stock-data-access
 Version: 0.1.0
-Summary: Reusable stock price data access layer for Mongo-backed OHLCV/minute bars
+Summary: Shared data access library for stock systems (Mongo, env, DAOs)
 Author: blueenergy
-Project-URL: Homepage, https://example.org/stock-data-access
+Project-URL: Homepage, https://github.com/blueenergy/data-access-lib
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
 Requires-Dist: pandas>=2.0
-Requires-Dist: pymongo>=4.0
+Requires-Dist: pymongo>=4.5
+Requires-Dist: python-dotenv>=1.0
 
 # stock-data-access
 
@@ -16,7 +21,7 @@ Reusable stock price data access layer for Mongo-backed OHLCV and minute bars.
 ## Install
 
 ```bash
-pip install -e /home/shuyolin/own/data-access-lib
+pip install -e /home/shuyolin/trading/data-access-lib
 ```
 
 ## Environment

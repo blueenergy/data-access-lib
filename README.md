@@ -5,7 +5,7 @@ Reusable stock price data access layer for Mongo-backed OHLCV and minute bars.
 ## Install
 
 ```bash
-pip install -e /home/shuyolin/own/data-access-lib
+pip install -e /home/shuyolin/trading/data-access-lib
 ```
 
 ## Environment
