@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stock-data-access"
-version = "0.1.0"
-description = "Shared data access library for stock systems (Mongo, env, DAOs)"
+version = "0.2.0"
+description = "Shared data access library for stock systems (Mongo, env, DAOs, pipeline catalog)"
 authors = [{ name = "blueenergy" }]
 readme = "README.md"
 requires-python = ">=3.8"
@@ -13,6 +13,7 @@ dependencies = [
   "pandas>=2.0",
   "pymongo>=4.5",
   "python-dotenv>=1.0",
+  "pyyaml>=5.4",
 ]
 
 classifiers = [
@@ -31,3 +32,6 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["stock_data_access*"]
+
+[tool.setuptools.package-data]
+stock_data_access = ["catalogs/*.yaml"]
