@@ -38,10 +38,14 @@ pipelines:
     run_mode: cron
     schedule_hint: "Supercronic 工作日 17:20 → daily_market_sync.sh stockinfo"
     freshness:
-      database: quant_data
-      collection: stock_info
-      field: list_date
-      field_kind: date_string
+      # list_date is the content field (IPO date of the last listed stock), not the
+      # sync timestamp. We monitor by job_status so data-pulse shows when the sync
+      # last ran rather than a static IPO date that changes only on new listings.
+      database: finance
+      collection: job_status
+      field: completed_at
+      field_kind: datetime
+      filter: { job_type: stock_info }
     # ── Data contract: reference snapshot ──────────────────────────────────────
     # stock_info is the listed-universe reference other contracts depend on
     # (e.g. financial_sync's per-period coverage). It is a full snapshot, not a
@@ -245,6 +249,22 @@ pipelines:
       collection: etf_share_size
       field: trade_date
       field_kind: date_string
+    # ── Data contract ─────────────────────────────────────────────────────────
+    # ETF share size is a daily snapshot (one row per fund per trade_date).
+    # Use calendar_trading_days to detect gaps and auto-backfill.
+    contract:
+      source: tushare
+      storage: { database: quant_data, collection: etf_share_size, date_field: trade_date, symbol_field: ts_code }
+      window: { start: "20200101", end: rolling }
+      sla: { max_lag_trading_days: 3, min_coverage_pct: 95.0, min_symbols_latest_day: 0 }
+      on_violation:
+        auto_repair: true
+        repair_task: run_etf_share_size
+        repair_args: ["--start", "{start}", "--end", "{end}"]
+        max_repair_window_days: 90
+      alert:
+        channels: [email, data_pulse]
+        "on": [repair_failed, still_violated]
 
   - id: financial_sync
     label: 财务数据
