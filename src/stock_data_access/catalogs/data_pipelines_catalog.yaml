@@ -260,7 +260,7 @@ pipelines:
       on_violation:
         auto_repair: true
         repair_task: run_etf_share_size
-        repair_args: ["--start", "{start}", "--end", "{end}"]
+        repair_args: ["--all", "--start", "{start}", "--end", "{end}"]
         max_repair_window_days: 90
       alert:
         channels: [email, data_pulse]
