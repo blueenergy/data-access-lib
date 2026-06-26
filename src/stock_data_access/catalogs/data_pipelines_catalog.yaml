@@ -96,6 +96,13 @@ pipelines:
         collection: volume_price
         date_field: trade_date
         symbol_field: symbol
+        # 只统计全市场 EOD 行：盘中/实时快照（miniQMT 目标池、Tushare rt_k、
+        # 东财盘中）只覆盖一小部分标的，写入同一集合会让"当天有数据"成立，
+        # 从而掩盖缺失的全量 EOD。排除它们后，仅靠快照支撑的交易日会被判为
+        # 缺口并由 run_stock_daily 全量回补。用 $nin（排除）而非 $in，保证
+        # 没有 source 字段的历史老数据仍被计入。
+        source_field: source
+        source_exclude: [miniqmt, tushare_rt_k, eastmoney_snapshot]
       window:
         start: "20100101"     # 商定的历史起点
         end: rolling          # rolling = 跟到最新交易日
