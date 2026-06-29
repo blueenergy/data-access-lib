@@ -698,11 +698,25 @@ pipelines:
       field: trade_date
       field_kind: date_string
 
+  - id: market_breadth_daily
+    label: A股每日广度原子指标
+    job_status_key: market_breadth_daily
+    group: layer1
+    depends_on: [stock_daily, stock_info, index_daily]
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 工作日 19:45 → daily_market_sync.sh market_breadth"
+    freshness:
+      database: quant_data
+      collection: market_breadth_daily
+      field: trade_date
+      field_kind: date_string
+
   - id: market_regime_scan
     label: A股广度估值扫描
     job_status_key: market_regime_scan
-    group: layer1
-    depends_on: [stock_daily, stock_info, index_daily, index_dailybasic, cn_macro_sync]
+    group: layer2
+    depends_on: [market_breadth_daily, index_daily, index_dailybasic, cn_macro_sync]
     trigger_on_complete: false
     run_mode: cron
     schedule_hint: "Supercronic 工作日 19:50 → daily_market_sync.sh regime_scan"
