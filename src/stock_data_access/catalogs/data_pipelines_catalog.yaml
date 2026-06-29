@@ -216,6 +216,20 @@ pipelines:
       field: trade_date
       field_kind: date_string
 
+  - id: index_dailybasic
+    label: 指数估值指标
+    job_status_key: index_dailybasic
+    group: layer0
+    depends_on: [index_daily]
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 工作日 17:55 → daily_market_sync.sh index_dailybasic（三个CAPE指数）"
+    freshness:
+      database: quant_data
+      collection: index_daily_basic
+      field: trade_date
+      field_kind: date_string
+
   - id: etf_daily
     label: ETF日线
     job_status_key: etf_daily
@@ -682,6 +696,20 @@ pipelines:
       database: quant_data
       collection: risk_scan
       field: trade_date
+      field_kind: date_string
+
+  - id: market_regime_scan
+    label: A股广度估值扫描
+    job_status_key: market_regime_scan
+    group: layer1
+    depends_on: [stock_daily, stock_info, index_daily, index_dailybasic, cn_macro_sync]
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 工作日 19:50 → daily_market_sync.sh regime_scan"
+    freshness:
+      database: quant_data
+      collection: market_regime_reports
+      field: scan_date
       field_kind: date_string
 
   # ── Layer 2: Depends on Layer 1 ───────────────────────────────────────────────
