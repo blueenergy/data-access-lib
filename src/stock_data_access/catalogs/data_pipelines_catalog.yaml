@@ -119,6 +119,42 @@ pipelines:
         channels: [email, data_pulse]
         "on": [repair_failed, still_violated]   # quoted: bare `on` is YAML boolean True
 
+  - id: stock_adj_factor
+    label: 股票复权因子
+    job_status_key: stock_adj_factor
+    group: layer0
+    depends_on: [tushare_daily_ready]
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 工作日 17:35 → daily_market_sync.sh stock_adj_factor（Tushare adj_factor -> stock_adj_factor）"
+    freshness:
+      database: quant_data
+      collection: stock_adj_factor
+      field: trade_date
+      field_kind: date_string
+    contract:
+      source: tushare
+      storage:
+        database: quant_data
+        collection: stock_adj_factor
+        date_field: trade_date
+        symbol_field: symbol
+      window:
+        start: "20160101"     # 与 volume_price 复权口径重刷范围一致
+        end: rolling
+      sla:
+        max_lag_trading_days: 1
+        min_coverage_pct: 99.0
+        min_symbols_latest_day: 4000
+      on_violation:
+        auto_repair: true
+        repair_task: run_stock_adj_factor_sync
+        repair_mode: by-date
+        max_repair_window_days: 30
+      alert:
+        channels: [email, data_pulse]
+        "on": [repair_failed, still_violated]
+
   - id: a_daily_realtime_sync
     label: A股实时日K同步
     job_status_key: a_daily_realtime_sync
