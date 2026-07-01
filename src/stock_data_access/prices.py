@@ -16,7 +16,7 @@ flags it via ``df.attrs["adj_degraded"] = True`` (and ``adjust`` recorded in att
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -24,6 +24,34 @@ from .mongo_context import get_db
 
 PRICE_COLS = ("open", "high", "low", "close", "pre_close")
 VALID_ADJUST = ("hfq", "qfq", "none")
+FactorPair = Tuple[str, str]
+
+
+def normalize_trade_date(trade_date) -> str:
+    """Normalize ``trade_date`` to YYYYMMDD string."""
+    if trade_date is None:
+        return ""
+    if hasattr(trade_date, "strftime"):
+        return trade_date.strftime("%Y%m%d")
+    s = str(trade_date).replace("-", "").strip()
+    return s[:8] if len(s) >= 8 else s
+
+
+def symbol_variants(symbol: str) -> List[str]:
+    """Return symbol lookup variants (with/without exchange suffix)."""
+    if not symbol:
+        return []
+    out: List[str] = [symbol]
+    if "." in symbol:
+        base = symbol.split(".", 1)[0]
+        if base not in out:
+            out.append(base)
+    else:
+        for suffix in (".SH", ".SZ", ".BJ"):
+            candidate = f"{symbol}{suffix}"
+            if candidate not in out:
+                out.append(candidate)
+    return out
 
 
 def apply_adjustment(
@@ -74,6 +102,116 @@ class AdjustedPriceDataAccess:
         self.db = db if db is not None else get_db()
         self.price_coll = self.db["volume_price"]
         self.adj_coll = self.db["stock_adj_factor"]
+        self._factor_cache: Dict[FactorPair, Optional[float]] = {}
+
+    def factor_for(
+        self,
+        symbol: str,
+        trade_date: str,
+        variants: Optional[Sequence[str]] = None,
+    ) -> Optional[float]:
+        """Return ``adj_factor`` for ``(symbol, trade_date)`` with optional symbol variants."""
+        td = normalize_trade_date(trade_date)
+        if not symbol or not td:
+            return None
+        cache_key = (symbol, td)
+        if cache_key in self._factor_cache:
+            return self._factor_cache[cache_key]
+
+        lookup_syms = list(variants) if variants else symbol_variants(symbol)
+        for sym in lookup_syms:
+            doc = self.adj_coll.find_one(
+                {"symbol": sym, "trade_date": td},
+                {"_id": 0, "adj_factor": 1},
+            )
+            if not doc:
+                continue
+            try:
+                value = float(doc["adj_factor"])
+                self._factor_cache[cache_key] = value
+                return value
+            except (TypeError, ValueError, KeyError):
+                continue
+        self._factor_cache[cache_key] = None
+        return None
+
+    def factor_map_for_pairs(
+        self,
+        pairs: Sequence[FactorPair],
+        *,
+        variants_by_symbol: Optional[Dict[str, Sequence[str]]] = None,
+    ) -> Dict[FactorPair, float]:
+        """Batch lookup ``adj_factor`` for ``(symbol, trade_date)`` pairs.
+
+        Missing factors are omitted from the result (callers may degrade to raw
+        close ratios). Uses per-instance cache to avoid duplicate queries.
+        """
+        from collections import defaultdict
+
+        variants_by_symbol = variants_by_symbol or {}
+        out: Dict[FactorPair, float] = {}
+        pending: List[FactorPair] = []
+        seen_pending: set = set()
+        for symbol, trade_date in pairs:
+            td = normalize_trade_date(trade_date)
+            if not symbol or not td:
+                continue
+            key: FactorPair = (symbol, td)
+            if key in self._factor_cache:
+                cached = self._factor_cache[key]
+                if cached is not None:
+                    out[key] = cached
+                continue
+            if key in seen_pending:
+                continue
+            seen_pending.add(key)
+            pending.append(key)
+
+        if not pending:
+            return out
+
+        by_symbol: Dict[str, set] = defaultdict(set)
+        for symbol, td in pending:
+            by_symbol[symbol].add(td)
+
+        for symbol, dates in by_symbol.items():
+            lookup_syms = list(variants_by_symbol.get(symbol) or symbol_variants(symbol))
+            if not lookup_syms:
+                for td in dates:
+                    self._factor_cache[(symbol, td)] = None
+                continue
+
+            cursor = self.adj_coll.find(
+                {
+                    "symbol": {"$in": lookup_syms},
+                    "trade_date": {"$in": sorted(dates)},
+                },
+                {"_id": 0, "symbol": 1, "trade_date": 1, "adj_factor": 1},
+            )
+            raw_hits: Dict[Tuple[str, str], float] = {}
+            for doc in cursor:
+                td = normalize_trade_date(doc.get("trade_date"))
+                doc_sym = str(doc.get("symbol") or "")
+                if not td or not doc_sym:
+                    continue
+                try:
+                    raw_hits[(doc_sym, td)] = float(doc["adj_factor"])
+                except (TypeError, ValueError, KeyError):
+                    continue
+
+            for td in dates:
+                pair: FactorPair = (symbol, td)
+                factor: Optional[float] = None
+                for sym in lookup_syms:
+                    hit = raw_hits.get((sym, td))
+                    if hit is not None:
+                        factor = hit
+                        break
+                self._factor_cache[pair] = factor
+                if factor is not None:
+                    out[pair] = factor
+
+        return out
 
     # -------- raw loaders --------
     def _load_raw(self, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -198,6 +336,8 @@ __all__ = [
     "AdjustedPriceDataAccess",
     "apply_adjustment",
     "load_adjusted_ohlc",
+    "normalize_trade_date",
+    "symbol_variants",
     "PRICE_COLS",
     "VALID_ADJUST",
 ]

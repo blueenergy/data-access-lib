@@ -139,3 +139,25 @@ def test_qfq_anchors_to_query_end_date(dao):
 def test_empty_when_no_raw(dao):
     df = dao.load_adjusted_ohlc("000001.SZ", "20240101", "20240103", adjust="hfq")
     assert df.empty
+
+
+def test_factor_for_hit_and_cache(dao):
+    assert dao.factor_for("600519.SH", "20240102") == pytest.approx(1.1)
+    # cached
+    assert dao.factor_for("600519.SH", "20240102") == pytest.approx(1.1)
+
+
+def test_factor_for_symbol_variant_without_suffix(dao):
+    assert dao.factor_for("600519", "20240103") == pytest.approx(1.21)
+
+
+def test_factor_for_missing_returns_none(dao):
+    assert dao.factor_for("600519.SH", "20990101") is None
+
+
+def test_factor_map_for_pairs_batch(dao):
+    pairs = [("600519.SH", "20240101"), ("600519.SH", "20240103"), ("000001.SZ", "20240101")]
+    got = dao.factor_map_for_pairs(pairs)
+    assert got[("600519.SH", "20240101")] == pytest.approx(1.0)
+    assert got[("600519.SH", "20240103")] == pytest.approx(1.21)
+    assert ("000001.SZ", "20240101") not in got
