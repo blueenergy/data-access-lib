@@ -1,4 +1,9 @@
 from .loader import StockPriceDataAccess
+from .prices import (
+	AdjustedPriceDataAccess,
+	apply_adjustment,
+	load_adjusted_ohlc,
+)
 from .score import ScoreDataAccess
 from .user import UserDataAccess
 from .index import IndexDataAccess
@@ -11,6 +16,9 @@ from .pipeline_catalog import (
 
 __all__ = [
 	"StockPriceDataAccess",
+	"AdjustedPriceDataAccess",
+	"apply_adjustment",
+	"load_adjusted_ohlc",
 	"ScoreDataAccess",
 	"UserDataAccess",
 	"IndexDataAccess",
