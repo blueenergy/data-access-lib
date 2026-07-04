@@ -174,21 +174,31 @@ class AdjustedPriceDataAccess:
         for symbol, td in pending:
             by_symbol[symbol].add(td)
 
-        for symbol, dates in by_symbol.items():
+        # Resolve each symbol's lookup variants up front, then issue a SINGLE
+        # batched query for all symbols/dates. The previous implementation ran
+        # one find() per symbol, so a page of N symbols cost N sequential round
+        # trips: invisible when the DB is co-located, but the dominant latency
+        # cost against a remote MongoDB (observed as ranking gateway timeouts).
+        # Per-pair resolution below is unchanged (variant precedence preserved).
+        variants_for: Dict[str, List[str]] = {}
+        all_lookup_syms: set = set()
+        for symbol in by_symbol:
             lookup_syms = list(variants_by_symbol.get(symbol) or symbol_variants(symbol))
-            if not lookup_syms:
-                for td in dates:
-                    self._factor_cache[(symbol, td)] = None
-                continue
+            variants_for[symbol] = lookup_syms
+            all_lookup_syms.update(lookup_syms)
+        all_dates: set = set()
+        for dates in by_symbol.values():
+            all_dates.update(dates)
 
+        raw_hits: Dict[Tuple[str, str], float] = {}
+        if all_lookup_syms and all_dates:
             cursor = self.adj_coll.find(
                 {
-                    "symbol": {"$in": lookup_syms},
-                    "trade_date": {"$in": sorted(dates)},
+                    "symbol": {"$in": sorted(all_lookup_syms)},
+                    "trade_date": {"$in": sorted(all_dates)},
                 },
                 {"_id": 0, "symbol": 1, "trade_date": 1, "adj_factor": 1},
             )
-            raw_hits: Dict[Tuple[str, str], float] = {}
             for doc in cursor:
                 td = normalize_trade_date(doc.get("trade_date"))
                 doc_sym = str(doc.get("symbol") or "")
@@ -199,6 +209,12 @@ class AdjustedPriceDataAccess:
                 except (TypeError, ValueError, KeyError):
                     continue
 
+        for symbol, dates in by_symbol.items():
+            lookup_syms = variants_for.get(symbol) or []
+            if not lookup_syms:
+                for td in dates:
+                    self._factor_cache[(symbol, td)] = None
+                continue
             for td in dates:
                 pair: FactorPair = (symbol, td)
                 factor: Optional[float] = None

@@ -161,3 +161,34 @@ def test_factor_map_for_pairs_batch(dao):
     assert got[("600519.SH", "20240101")] == pytest.approx(1.0)
     assert got[("600519.SH", "20240103")] == pytest.approx(1.21)
     assert ("000001.SZ", "20240101") not in got
+
+
+def test_factor_map_for_pairs_uses_single_query_for_multiple_symbols(dao):
+    """A page of N symbols must cost one query, not one find() per symbol.
+
+    Per-symbol round trips are cheap when the DB is co-located but dominate
+    latency against a remote MongoDB (the source of ranking gateway timeouts).
+    """
+    dao.adj_coll.insert_one(
+        {"symbol": "000002.SZ", "trade_date": "20240101", "adj_factor": 3.0}
+    )
+    calls = {"n": 0}
+    original_find = dao.adj_coll.find
+
+    def counting_find(*args, **kwargs):
+        calls["n"] += 1
+        return original_find(*args, **kwargs)
+
+    dao.adj_coll.find = counting_find
+
+    pairs = [
+        ("600519.SH", "20240101"),
+        ("000002.SZ", "20240101"),
+        ("600519.SH", "20240103"),
+    ]
+    got = dao.factor_map_for_pairs(pairs)
+
+    assert calls["n"] == 1  # single batched query across all symbols
+    assert got[("600519.SH", "20240101")] == pytest.approx(1.0)
+    assert got[("600519.SH", "20240103")] == pytest.approx(1.21)
+    assert got[("000002.SZ", "20240101")] == pytest.approx(3.0)
