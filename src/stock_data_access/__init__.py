@@ -43,6 +43,20 @@ from .symbol_risk import (
 	normalize_category,
 	normalize_subject,
 )
+from .symbol_opportunity import (
+	INDUSTRY_OPPORTUNITY_FINDINGS_COL,
+	OPPORTUNITY_CATEGORIES,
+	OPPORTUNITY_CATEGORY_ALIASES,
+	SYMBOL_OPPORTUNITY_FINDINGS_COL,
+	SymbolOpportunityLedgerAccess,
+	make_opportunity_finding_key,
+	normalize_opportunity_category,
+	normalize_opportunity_subject,
+)
+from .symbol_signal_review import (
+	SYMBOL_LLM_SIGNAL_REVIEWS_COL,
+	SymbolLlmSignalReviewAccess,
+)
 
 __all__ = [
 	"StockPriceDataAccess",
@@ -80,4 +94,14 @@ __all__ = [
 	"make_finding_key",
 	"normalize_category",
 	"normalize_subject",
+	"INDUSTRY_OPPORTUNITY_FINDINGS_COL",
+	"OPPORTUNITY_CATEGORIES",
+	"OPPORTUNITY_CATEGORY_ALIASES",
+	"SYMBOL_OPPORTUNITY_FINDINGS_COL",
+	"SymbolOpportunityLedgerAccess",
+	"make_opportunity_finding_key",
+	"normalize_opportunity_category",
+	"normalize_opportunity_subject",
+	"SYMBOL_LLM_SIGNAL_REVIEWS_COL",
+	"SymbolLlmSignalReviewAccess",
 ]

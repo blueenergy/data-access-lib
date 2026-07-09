@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stock-data-access"
-version = "0.2.4"
+version = "0.2.5"
 description = "Shared data access library for stock systems (Mongo, env, DAOs, pipeline catalog)"
 authors = [{ name = "blueenergy" }]
 readme = "README.md"
