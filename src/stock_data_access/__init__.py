@@ -57,6 +57,16 @@ from .symbol_signal_review import (
 	SYMBOL_LLM_SIGNAL_REVIEWS_COL,
 	SymbolLlmSignalReviewAccess,
 )
+from .evidence_fingerprint import (
+	build_symbol_fingerprints,
+	evidence_key,
+	evidence_keys,
+	fingerprint_from_keys,
+	latest_evidence_at,
+	normalize_date,
+	normalize_title,
+	normalize_url,
+)
 
 __all__ = [
 	"StockPriceDataAccess",
@@ -104,4 +114,12 @@ __all__ = [
 	"normalize_opportunity_subject",
 	"SYMBOL_LLM_SIGNAL_REVIEWS_COL",
 	"SymbolLlmSignalReviewAccess",
+	"build_symbol_fingerprints",
+	"evidence_key",
+	"evidence_keys",
+	"fingerprint_from_keys",
+	"latest_evidence_at",
+	"normalize_date",
+	"normalize_title",
+	"normalize_url",
 ]
