@@ -53,8 +53,8 @@ def test_build_symbol_fingerprints_separates_symbol_and_sector_keys():
 
     result = build_symbol_fingerprints(snapshot)
 
-    assert result["688001.SH"]["symbol_evidence_count"] == 1
-    assert result["688001.SH"]["sector_evidence_count"] == 1
+    assert result["688001.SH"]["evidence_count"] == 2
+    assert result["300001.SZ"]["evidence_count"] == 1
     assert result["688001.SH"]["combined_fingerprint"] != result["300001.SZ"]["combined_fingerprint"]
     assert result["688001.SH"]["latest_evidence_at"] == datetime(2026, 7, 10, 10, 0, 0)
     assert result["300001.SZ"]["sector_fingerprint"] == fingerprint_from_keys(["url:https://example.com/sector"])

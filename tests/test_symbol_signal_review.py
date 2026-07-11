@@ -25,15 +25,16 @@ def test_record_symbol_reviews_covers_symbols_with_no_findings():
 
     assert touched == 2
     latest = reviews.get_latest_reviews(["600519.SH", "300750.SZ"])
-    assert latest["600519.SH"]["reviewed_at"] == now
     assert latest["600519.SH"]["analyzed_at"] == now
     assert latest["600519.SH"]["checked_at"] == now
     assert latest["600519.SH"]["last_run_status"] == "analyzed"
-    assert latest["600519.SH"]["result_counts"] == {"risk": 0, "opportunity": 0}
-    assert latest["300750.SZ"]["dimensions"] == ["opportunity", "risk"]
+    assert latest["600519.SH"]["review_scope"] == "external_event"
+    assert "result_counts" not in latest["600519.SH"]
+    assert "dimensions" not in latest["300750.SZ"]
+    assert "plan_id" not in latest["600519.SH"]
 
 
-def test_record_symbol_reviews_updates_latest_and_keeps_history():
+def test_record_symbol_reviews_updates_latest_without_history():
     client = mongomock.MongoClient()
     reviews = SymbolLlmSignalReviewAccess(db=client["quant_analyzer"])
 
@@ -41,12 +42,12 @@ def test_record_symbol_reviews_updates_latest_and_keeps_history():
     reviews.record_symbol_reviews(["600519.SH"], reviewed_at=datetime(2026, 1, 10), run_id="run-2")
 
     row = reviews.get_latest_reviews(["600519.SH"])["600519.SH"]
-    assert row["run_id"] == "run-2"
-    assert row["reviewed_at"] == datetime(2026, 1, 10)
-    assert [entry["run_id"] for entry in row["review_history"]] == ["run-1", "run-2"]
+    assert row["analyzed_at"] == datetime(2026, 1, 10)
+    assert "run_id" not in row
+    assert "review_history" not in row
 
 
-def test_record_analysis_stores_fingerprints_and_dynamic_counts():
+def test_record_analysis_stores_minimal_checkpoint_fields():
     client = mongomock.MongoClient()
     reviews = SymbolLlmSignalReviewAccess(db=client["quant_analyzer"])
     now = datetime(2026, 1, 9, 10, 0, 0)
@@ -69,10 +70,12 @@ def test_record_analysis_stores_fingerprints_and_dynamic_counts():
     )
 
     row = reviews.get_latest_reviews(["600519.SH"])["600519.SH"]
-    assert row["result_counts"] == {"opportunity": 2, "risk": 1, "strength": 3}
     assert row["combined_fingerprint"] == "combo"
+    assert row["sector_fingerprint"] == "sec"
     assert row["latest_evidence_at"] == now
     assert row["prompt_version"] == "v2"
+    assert "symbol_fingerprint" not in row
+    assert "result_counts" not in row
 
 
 def test_record_skip_does_not_overwrite_analyzed_at_or_fingerprint():
@@ -96,10 +99,9 @@ def test_record_skip_does_not_overwrite_analyzed_at_or_fingerprint():
     row = reviews.get_latest_reviews(["600519.SH"])["600519.SH"]
     assert row["checked_at"] == checked_at
     assert row["analyzed_at"] == analyzed_at
-    assert row["reviewed_at"] == analyzed_at
     assert row["combined_fingerprint"] == "combo"
     assert row["last_run_status"] == "skipped_unchanged"
-    assert row["last_skip_reason"] == "unchanged_evidence"
+    assert "last_skip_reason" not in row
 
 
 def test_record_parse_error_keeps_previous_analysis_fingerprint():
@@ -120,7 +122,7 @@ def test_record_parse_error_keeps_previous_analysis_fingerprint():
     assert row["analyzed_at"] == analyzed_at
     assert row["combined_fingerprint"] == "combo"
     assert row["last_run_status"] == "parse_error"
-    assert row["last_error_detail"] == "bad json"
+    assert "last_error_detail" not in row
 
 
 def test_record_failure_keeps_previous_analysis_fingerprint():
@@ -141,4 +143,26 @@ def test_record_failure_keeps_previous_analysis_fingerprint():
     assert row["analyzed_at"] == analyzed_at
     assert row["combined_fingerprint"] == "combo"
     assert row["last_run_status"] == "failed"
-    assert row["last_error_detail"] == "network error"
+    assert "last_error_detail" not in row
+
+
+def test_review_scope_keeps_independent_checkpoints():
+    client = mongomock.MongoClient()
+    reviews = SymbolLlmSignalReviewAccess(db=client["quant_analyzer"])
+
+    reviews.record_analysis(
+        ["600519.SH"],
+        analyzed_at=datetime(2026, 1, 9),
+        fingerprints_by_symbol={"600519.SH": {"combined_fingerprint": "external"}},
+    )
+    reviews.record_analysis(
+        ["600519.SH"],
+        analyzed_at=datetime(2026, 1, 10),
+        fingerprints_by_symbol={"600519.SH": {"combined_fingerprint": "internal"}},
+        review_scope="internal_fundamental",
+    )
+
+    external = reviews.get_latest_reviews(["600519.SH"])["600519.SH"]
+    internal = reviews.get_latest_reviews(["600519.SH"], review_scope="internal_fundamental")["600519.SH"]
+    assert external["combined_fingerprint"] == "external"
+    assert internal["combined_fingerprint"] == "internal"

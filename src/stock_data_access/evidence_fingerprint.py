@@ -151,13 +151,10 @@ def build_symbol_fingerprints(evidence_snapshot: Mapping[str, Any]) -> Dict[str,
         combined = fingerprint_from_keys([symbol_fp, sector_fp])
         latest = latest_evidence_at([*symbol_rows, *sector_rows])
         results[str(symbol)] = {
-            "symbol_fingerprint": symbol_fp,
             "sector_fingerprint": sector_fp,
             "combined_fingerprint": combined,
             "evidence_count": len(symbol_keys) + len(sector_keys),
             "latest_evidence_at": latest or sector_latest,
-            "symbol_evidence_count": len(symbol_keys),
-            "sector_evidence_count": len(sector_keys),
         }
     return results
 
