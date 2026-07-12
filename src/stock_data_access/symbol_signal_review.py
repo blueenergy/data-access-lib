@@ -1,8 +1,8 @@
-"""Lightweight LLM signal review checkpoints.
+"""Signal review checkpoints for LLM and deterministic rule engines.
 
-The risk/opportunity ledgers are the source of truth for findings and their
-review lifecycle.  This collection only records enough state to decide whether
-the LLM should run again for a symbol's external-event evidence.
+Finding ledgers remain the source of truth for lifecycle state. This collection
+records per-scope fingerprints, engine metadata, completeness and result counts
+needed to decide whether external LLM or internal rule analysis should rerun.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ def _utcnow() -> datetime:
 
 
 class SymbolLlmSignalReviewAccess:
-    """Read/write access for symbol LLM signal review stamps."""
+    """Backward-compatible access for symbol signal review stamps."""
 
     def __init__(self, db=None):
         self.db = db if db is not None else get_db()
@@ -50,8 +50,12 @@ class SymbolLlmSignalReviewAccess:
         fingerprints_by_symbol: Optional[Mapping[str, Mapping[str, Any]]] = None,
         prompt_version: Optional[str] = None,
         review_scope: str = DEFAULT_REVIEW_SCOPE,
+        engine_type: str = "llm",
+        engine_version: Optional[str] = None,
+        rule_config_hash: Optional[str] = None,
+        input_completeness: Optional[str] = None,
     ) -> int:
-        """Record a successful LLM analysis for each symbol."""
+        """Record a successful signal analysis for each symbol."""
         now = analyzed_at or _utcnow()
         fp_by_symbol = fingerprints_by_symbol or {}
         scope = self._review_scope(review_scope)
@@ -69,10 +73,33 @@ class SymbolLlmSignalReviewAccess:
                 "analyzed_at": now,
                 "last_run_status": "analyzed",
                 "prompt_version": prompt_version,
+                "engine_type": str(engine_type or "llm"),
+                "engine_version": engine_version,
+                "dimensions_reviewed": [str(value) for value in dimensions],
             }
+            counts = dict((result_counts_by_symbol or {}).get(symbol) or {})
+            if counts:
+                set_doc["result_counts"] = {
+                    str(key): int(value) for key, value in counts.items()
+                }
+            if rule_config_hash is not None:
+                set_doc["rule_config_hash"] = rule_config_hash
+            if input_completeness is not None:
+                set_doc["input_completeness"] = input_completeness
+            for key, value in {
+                "industry": industry,
+                "run_id": run_id,
+                "plan_id": plan_id,
+                "task_id": task_id,
+                "user_id": user_id,
+            }.items():
+                if value is not None:
+                    set_doc[key] = value
             for key in (
+                "symbol_fingerprint",
                 "sector_fingerprint",
                 "combined_fingerprint",
+                "internal_fingerprint",
                 "evidence_count",
                 "latest_evidence_at",
             ):
@@ -101,6 +128,10 @@ class SymbolLlmSignalReviewAccess:
         fingerprints_by_symbol: Optional[Mapping[str, Mapping[str, Any]]] = None,
         reason: str = "unchanged_evidence",
         review_scope: str = DEFAULT_REVIEW_SCOPE,
+        engine_type: Optional[str] = None,
+        engine_version: Optional[str] = None,
+        rule_config_hash: Optional[str] = None,
+        input_completeness: Optional[str] = None,
     ) -> int:
         """Record that evidence was checked but LLM analysis was skipped."""
         now = checked_at or _utcnow()
@@ -117,8 +148,23 @@ class SymbolLlmSignalReviewAccess:
                 "review_scope": scope,
                 "checked_at": now,
                 "last_run_status": "skipped_unchanged",
+                "last_skip_reason": reason,
             }
+            for key, value in {
+                "industry": industry,
+                "run_id": run_id,
+                "plan_id": plan_id,
+                "task_id": task_id,
+                "user_id": user_id,
+                "engine_type": engine_type,
+                "engine_version": engine_version,
+                "rule_config_hash": rule_config_hash,
+                "input_completeness": input_completeness,
+            }.items():
+                if value is not None:
+                    set_doc[key] = value
             for key in (
+                "internal_fingerprint",
                 "evidence_count",
                 "latest_evidence_at",
             ):
@@ -191,6 +237,18 @@ class SymbolLlmSignalReviewAccess:
                 "checked_at": now,
                 "last_run_status": safe_status,
             }
+            if error_detail is not None:
+                set_doc["last_error_detail"] = str(error_detail)
+            for key, value in {
+                "industry": industry,
+                "run_id": run_id,
+                "plan_id": plan_id,
+                "task_id": task_id,
+                "user_id": user_id,
+                "dimensions_reviewed": [str(value) for value in dimensions],
+            }.items():
+                if value is not None:
+                    set_doc[key] = value
             self.coll.update_one(
                 self._checkpoint_filter(symbol, scope),
                 {"$set": set_doc},
@@ -225,6 +283,7 @@ class SymbolLlmSignalReviewAccess:
             dimensions=dimensions,
             result_counts_by_symbol=result_counts_by_symbol,
             review_scope=review_scope,
+            engine_type="llm",
         )
 
     def get_latest_reviews(
@@ -243,9 +302,34 @@ class SymbolLlmSignalReviewAccess:
         )
         return {str(row.get("symbol") or ""): row for row in rows if row.get("symbol")}
 
+    def reset_scope(
+        self,
+        review_scope: str,
+        *,
+        rule_config_hash: Optional[str] = None,
+        dry_run: bool = True,
+    ) -> int:
+        """Count or delete checkpoints for one explicit review scope."""
+
+        scope = self._review_scope(review_scope)
+        query: Dict[str, Any] = {"review_scope": scope}
+        if rule_config_hash is not None:
+            config_hash = str(rule_config_hash).strip()
+            if not config_hash:
+                raise ValueError("rule_config_hash cannot be empty")
+            query["rule_config_hash"] = config_hash
+        count = int(self.coll.count_documents(query))
+        if not dry_run and count:
+            self.coll.delete_many(query)
+        return count
+
+
+SymbolSignalReviewAccess = SymbolLlmSignalReviewAccess
+
 
 __all__ = [
     "DEFAULT_REVIEW_SCOPE",
     "SYMBOL_LLM_SIGNAL_REVIEWS_COL",
     "SymbolLlmSignalReviewAccess",
+    "SymbolSignalReviewAccess",
 ]

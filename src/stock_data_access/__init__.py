@@ -56,6 +56,15 @@ from .symbol_opportunity import (
 from .symbol_signal_review import (
 	SYMBOL_LLM_SIGNAL_REVIEWS_COL,
 	SymbolLlmSignalReviewAccess,
+	SymbolSignalReviewAccess,
+)
+from .symbol_strength import (
+	SYMBOL_STRENGTH_FINDINGS_COL,
+	SymbolStrengthLedgerAccess,
+)
+from .symbol_weakness import (
+	SYMBOL_WEAKNESS_FINDINGS_COL,
+	SymbolWeaknessLedgerAccess,
 )
 from .evidence_fingerprint import (
 	build_symbol_fingerprints,
@@ -114,6 +123,11 @@ __all__ = [
 	"normalize_opportunity_subject",
 	"SYMBOL_LLM_SIGNAL_REVIEWS_COL",
 	"SymbolLlmSignalReviewAccess",
+	"SymbolSignalReviewAccess",
+	"SYMBOL_STRENGTH_FINDINGS_COL",
+	"SymbolStrengthLedgerAccess",
+	"SYMBOL_WEAKNESS_FINDINGS_COL",
+	"SymbolWeaknessLedgerAccess",
 	"build_symbol_fingerprints",
 	"evidence_key",
 	"evidence_keys",

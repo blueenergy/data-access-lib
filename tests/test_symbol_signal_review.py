@@ -4,7 +4,10 @@ from datetime import datetime
 
 import mongomock
 
-from stock_data_access.symbol_signal_review import SymbolLlmSignalReviewAccess
+from stock_data_access.symbol_signal_review import (
+    SymbolLlmSignalReviewAccess,
+    SymbolSignalReviewAccess,
+)
 
 
 def test_record_symbol_reviews_covers_symbols_with_no_findings():
@@ -29,9 +32,9 @@ def test_record_symbol_reviews_covers_symbols_with_no_findings():
     assert latest["600519.SH"]["checked_at"] == now
     assert latest["600519.SH"]["last_run_status"] == "analyzed"
     assert latest["600519.SH"]["review_scope"] == "external_event"
-    assert "result_counts" not in latest["600519.SH"]
-    assert "dimensions" not in latest["300750.SZ"]
-    assert "plan_id" not in latest["600519.SH"]
+    assert latest["600519.SH"]["result_counts"] == {"risk": 0, "opportunity": 0}
+    assert latest["300750.SZ"]["dimensions_reviewed"] == ["risk", "opportunity"]
+    assert latest["600519.SH"]["plan_id"] == "plan-1"
 
 
 def test_record_symbol_reviews_updates_latest_without_history():
@@ -43,7 +46,7 @@ def test_record_symbol_reviews_updates_latest_without_history():
 
     row = reviews.get_latest_reviews(["600519.SH"])["600519.SH"]
     assert row["analyzed_at"] == datetime(2026, 1, 10)
-    assert "run_id" not in row
+    assert row["run_id"] == "run-2"
     assert "review_history" not in row
 
 
@@ -74,8 +77,9 @@ def test_record_analysis_stores_minimal_checkpoint_fields():
     assert row["sector_fingerprint"] == "sec"
     assert row["latest_evidence_at"] == now
     assert row["prompt_version"] == "v2"
-    assert "symbol_fingerprint" not in row
-    assert "result_counts" not in row
+    assert row["symbol_fingerprint"] == "sym"
+    assert row["result_counts"] == {"risk": 1, "opportunity": 2, "strength": 3}
+    assert row["dimensions_reviewed"] == ["risk", "opportunity", "strength"]
 
 
 def test_record_skip_does_not_overwrite_analyzed_at_or_fingerprint():
@@ -101,7 +105,7 @@ def test_record_skip_does_not_overwrite_analyzed_at_or_fingerprint():
     assert row["analyzed_at"] == analyzed_at
     assert row["combined_fingerprint"] == "combo"
     assert row["last_run_status"] == "skipped_unchanged"
-    assert "last_skip_reason" not in row
+    assert row["last_skip_reason"] == "unchanged_evidence"
 
 
 def test_record_parse_error_keeps_previous_analysis_fingerprint():
@@ -122,7 +126,7 @@ def test_record_parse_error_keeps_previous_analysis_fingerprint():
     assert row["analyzed_at"] == analyzed_at
     assert row["combined_fingerprint"] == "combo"
     assert row["last_run_status"] == "parse_error"
-    assert "last_error_detail" not in row
+    assert row["last_error_detail"] == "bad json"
 
 
 def test_record_failure_keeps_previous_analysis_fingerprint():
@@ -143,7 +147,7 @@ def test_record_failure_keeps_previous_analysis_fingerprint():
     assert row["analyzed_at"] == analyzed_at
     assert row["combined_fingerprint"] == "combo"
     assert row["last_run_status"] == "failed"
-    assert "last_error_detail" not in row
+    assert row["last_error_detail"] == "network error"
 
 
 def test_review_scope_keeps_independent_checkpoints():
@@ -166,3 +170,48 @@ def test_review_scope_keeps_independent_checkpoints():
     internal = reviews.get_latest_reviews(["600519.SH"], review_scope="internal_fundamental")["600519.SH"]
     assert external["combined_fingerprint"] == "external"
     assert internal["combined_fingerprint"] == "internal"
+
+
+def test_generic_review_access_stores_internal_rule_contract():
+    client = mongomock.MongoClient()
+    reviews = SymbolSignalReviewAccess(db=client["quant_analyzer"])
+
+    reviews.record_analysis(
+        ["300196.SZ"],
+        analyzed_at=datetime(2026, 7, 10),
+        dimensions=("strength", "weakness"),
+        result_counts_by_symbol={"300196.SZ": {"strength": 2, "weakness": 1}},
+        fingerprints_by_symbol={
+            "300196.SZ": {
+                "internal_fingerprint": "internal-fp",
+                "evidence_count": 6,
+            }
+        },
+        review_scope="internal_fundamental",
+        engine_type="rules",
+        engine_version="sw-mvp-v1",
+        rule_config_hash="rules-hash",
+        input_completeness="complete",
+    )
+
+    row = reviews.get_latest_reviews(
+        ["300196.SZ"], review_scope="internal_fundamental"
+    )["300196.SZ"]
+    assert row["engine_type"] == "rules"
+    assert row["engine_version"] == "sw-mvp-v1"
+    assert row["rule_config_hash"] == "rules-hash"
+    assert row["internal_fingerprint"] == "internal-fp"
+    assert row["input_completeness"] == "complete"
+    assert row["dimensions_reviewed"] == ["strength", "weakness"]
+
+    assert reviews.reset_scope(
+        "internal_fundamental", rule_config_hash="rules-hash"
+    ) == 1
+    assert reviews.reset_scope(
+        "internal_fundamental",
+        rule_config_hash="rules-hash",
+        dry_run=False,
+    ) == 1
+    assert reviews.get_latest_reviews(
+        ["300196.SZ"], review_scope="internal_fundamental"
+    ) == {}
