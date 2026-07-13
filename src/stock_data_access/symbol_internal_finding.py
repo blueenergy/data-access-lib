@@ -36,6 +36,7 @@ class SymbolInternalFindingLedgerAccess:
         evidence_version: str,
         source: Optional[Mapping[str, Any]] = None,
         evaluated_at: Optional[datetime] = None,
+        close_rule_reasons: Optional[Mapping[str, str]] = None,
     ) -> Dict[str, int]:
         """Apply explicit match/close decisions from the deterministic engine.
 
@@ -102,6 +103,7 @@ class SymbolInternalFindingLedgerAccess:
                 "detail": str(finding.get("detail") or ""),
                 "evidence": list(finding.get("evidence") or []),
                 "lifecycle_policy": dict(finding.get("lifecycle_policy") or {}),
+                "rule_condition": dict(finding.get("rule_condition") or {}),
                 self.level_field: level,
                 "status": "active",
             }
@@ -151,6 +153,10 @@ class SymbolInternalFindingLedgerAccess:
             rule_id = str(raw_rule_id or "").strip()
             if not rule_id or rule_id in matched_rule_ids:
                 continue
+            closed_reason = (close_rule_reasons or {}).get(
+                rule_id,
+                "rule_exit_condition_met",
+            )
             result = self.coll.update_one(
                 {
                     "symbol": sym,
@@ -168,7 +174,7 @@ class SymbolInternalFindingLedgerAccess:
                         "rule_config_hash": config_hash,
                         "closed_at": now,
                         "closed_as_of": version,
-                        "closed_reason": "rule_exit_condition_met",
+                        "closed_reason": closed_reason,
                         "closed_by": "rules",
                     },
                     "$push": {
