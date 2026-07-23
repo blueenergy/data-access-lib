@@ -690,6 +690,20 @@ pipelines:
       field_kind: datetime
       document_id: "latest"
 
+  - id: market_events
+    label: 市场事件日历
+    job_status_key: market_events
+    group: layer0
+    depends_on: []
+    trigger_on_complete: false
+    run_mode: loop
+    schedule_hint: "start.sh：DEPLOY_MODE=domestic 或 full 时常驻 run_market_events_sync --loop（MARKET_EVENTS_SYNC_INTERVAL，默认 21600s）"
+    freshness:
+      database: quant_data
+      collection: market_events
+      field: updated_at
+      field_kind: datetime
+
   # ── Layer 1: Depends on Layer 0 ───────────────────────────────────────────────
 
   - id: market_sentiment
