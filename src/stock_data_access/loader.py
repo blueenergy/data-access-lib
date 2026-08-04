@@ -144,14 +144,25 @@ class StockPriceDataAccess:
         return result
 
 
-    def fetch_market_spectrum(self, start_date: str, end_date: str) -> pd.DataFrame:
+    def fetch_market_spectrum(
+        self, start_date: str, end_date: str, ma_period: int = 5
+    ) -> pd.DataFrame:
         """Fetch market spectrum (Yin/Yang) data.
         Returns DataFrame set index to trade_date (datetime).
         Columns: yin_spectrum, yang_spectrum, total_stocks
+
+        The collection is keyed on (trade_date, ma_period, granularity), so it can
+        hold several rows per day. Pinning ma_period/granularity keeps this one row
+        per trade_date; without it a future non-5 MA or intraday backfill would
+        silently duplicate every date in the returned frame.
         """
         coll = self.db["market_spectrum"]
         cursor = coll.find(
-            {"trade_date": {"$gte": start_date, "$lte": end_date}},
+            {
+                "trade_date": {"$gte": start_date, "$lte": end_date},
+                "ma_period": ma_period,
+                "granularity": "daily",
+            },
             {"trade_date": 1, "yin_spectrum": 1, "yang_spectrum": 1, "total_stocks": 1, "_id": 0}
         ).sort("trade_date", 1)
         

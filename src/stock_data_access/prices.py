@@ -289,8 +289,10 @@ class AdjustedPriceDataAccess:
 
         Returns a DataFrame indexed by ``trade_date`` (datetime) with adjusted
         price columns, raw ``volume``/``amount``, and the joined ``adj_factor``.
-        Empty DataFrame if no raw prices exist. Sets ``df.attrs["adjust"]`` and
-        ``df.attrs["adj_degraded"]``.
+        Empty DataFrame if no raw prices exist. Sets ``df.attrs["adjust"]``,
+        ``df.attrs["adj_degraded"]``, ``df.attrs["adj_coverage"]`` (share of
+        rows with a factor before gap-fill), and ``df.attrs["adj_bfilled"]``
+        (whether the window start required backward fill).
         """
         if adjust not in VALID_ADJUST:
             raise ValueError(f"adjust must be one of {VALID_ADJUST}, got {adjust!r}")
@@ -300,16 +302,23 @@ class AdjustedPriceDataAccess:
             empty = pd.DataFrame()
             empty.attrs["adjust"] = adjust
             empty.attrs["adj_degraded"] = False
+            empty.attrs["adj_coverage"] = 0.0
+            empty.attrs["adj_bfilled"] = False
             return empty
 
         factors = self._load_factors(symbol, start_date, end_date)
         if factors.empty:
             merged = raw.copy()
             merged["adj_factor"] = pd.NA
+            adj_coverage = 0.0
+            adj_bfilled = False
         else:
             merged = raw.merge(factors, on="trade_date", how="left")
+            factor_series = pd.to_numeric(merged["adj_factor"], errors="coerce")
+            adj_coverage = float(factor_series.notna().mean()) if len(factor_series) else 0.0
+            adj_bfilled = bool(factor_series.isna().any() and factor_series.isna().iloc[0])
             # adj_factor is piecewise-constant; fill gaps within the window.
-            merged["adj_factor"] = merged["adj_factor"].ffill().bfill()
+            merged["adj_factor"] = factor_series.ffill().bfill()
 
         latest = self.latest_factor(symbol, as_of_date=end_date) if adjust == "qfq" else None
         adjusted = apply_adjustment(merged, adjust=adjust, latest_factor=latest)
@@ -319,6 +328,8 @@ class AdjustedPriceDataAccess:
         ).sort_index()
         adjusted.attrs["adjust"] = adjust
         adjusted.attrs["adj_degraded"] = bool(adjusted.attrs.get("adj_degraded", False))
+        adjusted.attrs["adj_coverage"] = adj_coverage
+        adjusted.attrs["adj_bfilled"] = adj_bfilled
         return adjusted
 
     def load_adjusted_batch(

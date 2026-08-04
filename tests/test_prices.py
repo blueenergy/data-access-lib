@@ -104,6 +104,8 @@ def test_load_hfq_joins_and_adjusts(dao):
     assert df["close"].tolist() == pytest.approx([10.0, 12.1, 14.52])
     assert df.attrs["adjust"] == "hfq"
     assert df.attrs["adj_degraded"] is False
+    assert df.attrs["adj_coverage"] == pytest.approx(1.0)
+    assert df.attrs["adj_bfilled"] is False
     assert isinstance(df.index, pd.DatetimeIndex)
 
 
@@ -117,6 +119,16 @@ def test_missing_factor_degrades(dao):
     df = dao.load_adjusted_ohlc("600519.SH", "20240101", "20240103", adjust="hfq")
     assert df["close"].tolist() == pytest.approx([10.0, 11.0, 12.0])
     assert df.attrs["adj_degraded"] is True
+    assert df.attrs["adj_coverage"] == pytest.approx(0.0)
+    assert df.attrs["adj_bfilled"] is False
+
+
+def test_partial_factor_missing_sets_coverage_and_bfilled(dao):
+    dao.adj_coll.delete_one({"symbol": "600519.SH", "trade_date": "20240101"})
+    df = dao.load_adjusted_ohlc("600519.SH", "20240101", "20240103", adjust="hfq")
+    assert df.attrs["adj_coverage"] == pytest.approx(2 / 3)
+    assert df.attrs["adj_bfilled"] is True
+    assert df.attrs["adj_degraded"] is False
 
 
 def test_factor_ffill_within_window(dao):
