@@ -204,3 +204,65 @@ def test_factor_map_for_pairs_uses_single_query_for_multiple_symbols(dao):
     assert got[("600519.SH", "20240101")] == pytest.approx(1.0)
     assert got[("600519.SH", "20240103")] == pytest.approx(1.21)
     assert got[("000002.SZ", "20240101")] == pytest.approx(3.0)
+
+
+def test_load_adjusted_ohlc_batch_uses_batched_queries(dao):
+    dao.adj_coll.insert_one(
+        {"symbol": "000002.SZ", "trade_date": "20240101", "adj_factor": 3.0}
+    )
+    dao.price_coll.insert_many(
+        [
+            {
+                "symbol": "000002.SZ",
+                "trade_date": "20240101",
+                "open": 5.0,
+                "high": 5.5,
+                "low": 4.5,
+                "close": 5.0,
+                "pre_close": 4.8,
+                "volume": 50,
+            },
+            {
+                "symbol": "000002.SZ",
+                "trade_date": "20240102",
+                "open": 5.5,
+                "high": 6.0,
+                "low": 5.0,
+                "close": 5.5,
+                "pre_close": 5.0,
+                "volume": 60,
+            },
+        ]
+    )
+    calls = {"price": 0, "adj": 0}
+    orig_price_find = dao.price_coll.find
+    orig_adj_find = dao.adj_coll.find
+
+    def counting_price_find(*args, **kwargs):
+        calls["price"] += 1
+        return orig_price_find(*args, **kwargs)
+
+    def counting_adj_find(*args, **kwargs):
+        calls["adj"] += 1
+        return orig_adj_find(*args, **kwargs)
+
+    dao.price_coll.find = counting_price_find
+    dao.adj_coll.find = counting_adj_find
+
+    out = dao.load_adjusted_ohlc_batch(
+        ["600519.SH", "000002.SZ"], "20240101", "20240103", adjust="hfq"
+    )
+    assert calls["price"] == 1
+    assert calls["adj"] == 1
+    assert set(out.keys()) == {"600519.SH", "000002.SZ"}
+    assert out["600519.SH"]["close"].tolist() == pytest.approx([10.0, 12.1, 14.52])
+    assert out["000002.SZ"]["close"].tolist() == pytest.approx([15.0, 16.5])
+
+
+def test_load_adjusted_ohlc_batch_ohlc_all_adjusted(dao):
+    out = dao.load_adjusted_ohlc_batch(
+        ["600519.SH"], "20240101", "20240103", adjust="hfq"
+    )
+    df = out["600519.SH"]
+    assert df["high"].tolist() == pytest.approx([10.5 * 1.0, 11.5 * 1.1, 12.5 * 1.21])
+    assert df["low"].tolist() == pytest.approx([9.5 * 1.0, 10.5 * 1.1, 11.5 * 1.21])

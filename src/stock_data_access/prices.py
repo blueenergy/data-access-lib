@@ -339,11 +339,121 @@ class AdjustedPriceDataAccess:
         end_date: str,
         adjust: str = "hfq",
     ) -> Dict[str, pd.DataFrame]:
-        """Convenience batch wrapper returning ``{symbol: adjusted DataFrame}``."""
-        return {
-            s: self.load_adjusted_ohlc(s, start_date, end_date, adjust=adjust)
-            for s in symbols
+        """Convenience batch wrapper returning ``{symbol: adjusted DataFrame}``.
+
+        Prefer :meth:`load_adjusted_ohlc_batch` for screening workloads; it issues
+        batched ``volume_price`` / ``stock_adj_factor`` queries instead of one
+        round-trip per symbol.
+        """
+        return self.load_adjusted_ohlc_batch(
+            symbols, start_date, end_date, adjust=adjust
+        )
+
+    def load_adjusted_ohlc_batch(
+        self,
+        symbols: List[str],
+        start_date: str,
+        end_date: str,
+        adjust: str = "hfq",
+    ) -> Dict[str, pd.DataFrame]:
+        """Batch load adjusted OHLC for multiple symbols with batched DB queries.
+
+        Returns ``{symbol: DataFrame}`` with the same columns and ``attrs`` as
+        :meth:`load_adjusted_ohlc`. Symbols with no raw prices are omitted.
+        """
+        if adjust not in VALID_ADJUST:
+            raise ValueError(f"adjust must be one of {VALID_ADJUST}, got {adjust!r}")
+
+        unique_symbols = [s for s in dict.fromkeys(symbols) if s]
+        if not unique_symbols:
+            return {}
+
+        price_proj = {
+            "_id": 0,
+            "symbol": 1,
+            "trade_date": 1,
+            "open": 1,
+            "high": 1,
+            "low": 1,
+            "close": 1,
+            "pre_close": 1,
+            "volume": 1,
+            "amount": 1,
         }
+        price_cursor = self.price_coll.find(
+            {
+                "symbol": {"$in": unique_symbols},
+                "trade_date": {"$gte": start_date, "$lte": end_date},
+            },
+            price_proj,
+        ).sort([("symbol", 1), ("trade_date", 1)])
+
+        raw_by_symbol: Dict[str, List[dict]] = {}
+        for doc in price_cursor:
+            sym = str(doc.get("symbol") or "")
+            if not sym:
+                continue
+            raw_by_symbol.setdefault(sym, []).append(doc)
+
+        factor_cursor = self.adj_coll.find(
+            {
+                "symbol": {"$in": unique_symbols},
+                "trade_date": {"$gte": start_date, "$lte": end_date},
+            },
+            {"_id": 0, "symbol": 1, "trade_date": 1, "adj_factor": 1},
+        ).sort([("symbol", 1), ("trade_date", 1)])
+
+        factors_by_symbol: Dict[str, List[dict]] = {}
+        for doc in factor_cursor:
+            sym = str(doc.get("symbol") or "")
+            if not sym:
+                continue
+            factors_by_symbol.setdefault(sym, []).append(doc)
+
+        latest_factors: Dict[str, Optional[float]] = {}
+        if adjust == "qfq":
+            for sym in unique_symbols:
+                latest_factors[sym] = self.latest_factor(sym, as_of_date=end_date)
+
+        out: Dict[str, pd.DataFrame] = {}
+        for sym in unique_symbols:
+            raw_rows = raw_by_symbol.get(sym)
+            if not raw_rows:
+                continue
+            raw = pd.DataFrame(raw_rows)
+            factor_rows = factors_by_symbol.get(sym)
+            factors = pd.DataFrame(factor_rows) if factor_rows else pd.DataFrame()
+
+            if factors.empty:
+                merged = raw.copy()
+                merged["adj_factor"] = pd.NA
+                adj_coverage = 0.0
+                adj_bfilled = False
+            else:
+                merged = raw.merge(factors, on="trade_date", how="left")
+                factor_series = pd.to_numeric(merged["adj_factor"], errors="coerce")
+                adj_coverage = (
+                    float(factor_series.notna().mean()) if len(factor_series) else 0.0
+                )
+                adj_bfilled = bool(
+                    factor_series.isna().any() and factor_series.isna().iloc[0]
+                )
+                merged["adj_factor"] = factor_series.ffill().bfill()
+
+            latest = latest_factors.get(sym) if adjust == "qfq" else None
+            adjusted = apply_adjustment(merged, adjust=adjust, latest_factor=latest)
+            adjusted = adjusted.set_index(
+                pd.to_datetime(adjusted["trade_date"], format="mixed")
+            ).sort_index()
+            adjusted.attrs["adjust"] = adjust
+            adjusted.attrs["adj_degraded"] = bool(
+                adjusted.attrs.get("adj_degraded", False)
+            )
+            adjusted.attrs["adj_coverage"] = adj_coverage
+            adjusted.attrs["adj_bfilled"] = adj_bfilled
+            out[sym] = adjusted
+
+        return out
 
 
 def load_adjusted_ohlc(
