@@ -719,6 +719,24 @@ pipelines:
       collection: market_spectrum
       field: trade_date
       field_kind: date_string
+    contract:
+      # Its only producer failed for ~2 months and nobody noticed: with no
+      # contract, the nightly reconcile never looked at this collection.
+      source: derived
+      # Reconcile order, not the daily DAG gate: the repair recomputes from
+      # volume_price, so stock_daily has to be made whole first.
+      depends_on: [stock_daily]
+      storage: { database: quant_data, collection: market_spectrum, date_field: trade_date }
+      window: { start: "20240102", end: rolling }
+      sla: { max_lag_trading_days: 2, min_coverage_pct: 99.0, min_symbols_latest_day: 0 }
+      on_violation:
+        auto_repair: true
+        repair_task: analyze_market_sentiment
+        repair_args: ["--start", "{start}", "--end", "{end}"]
+        max_repair_window_days: 30
+      alert:
+        channels: [email, data_pulse]
+        "on": [repair_failed, still_violated]
 
   - id: theme_lag_candidates
     label: 主题补涨候选
@@ -761,6 +779,23 @@ pipelines:
       collection: market_breadth_daily
       field: trade_date
       field_kind: date_string
+    contract:
+      # Stalled for ten trading days because the 19:45 run kept finding no
+      # volume_price rows yet and recorded success anyway. Reconcile runs at
+      # 23:10, after those rows land, so it can close the gap.
+      source: derived
+      depends_on: [stock_daily]
+      storage: { database: quant_data, collection: market_breadth_daily, date_field: trade_date }
+      window: { start: "20240102", end: rolling }
+      sla: { max_lag_trading_days: 2, min_coverage_pct: 99.0, min_symbols_latest_day: 0 }
+      on_violation:
+        auto_repair: true
+        repair_task: run_market_breadth_daily
+        repair_args: ["--start", "{start}", "--end", "{end}"]
+        max_repair_window_days: 30
+      alert:
+        channels: [email, data_pulse]
+        "on": [repair_failed, still_violated]
 
   - id: market_regime_scan
     label: A股广度估值扫描
