@@ -265,6 +265,23 @@ pipelines:
       collection: index_daily_basic
       field: trade_date
       field_kind: date_string
+    contract:
+      # Three CAPE indices, one row each per trading day. 100% covered back to
+      # 20240102, and market_regime_scan reads it, so a silent stall here
+      # propagates downstream.
+      source: tushare
+      depends_on: [index_daily]
+      storage: { database: quant_data, collection: index_daily_basic, date_field: trade_date }
+      window: { start: "20240102", end: rolling }
+      sla: { max_lag_trading_days: 2, min_coverage_pct: 99.0, min_symbols_latest_day: 0 }
+      on_violation:
+        auto_repair: true
+        repair_task: run_index_dailybasic_sync
+        repair_args: ["--start", "{start}", "--end", "{end}"]
+        max_repair_window_days: 30
+      alert:
+        channels: [email, data_pulse]
+        "on": [repair_failed, still_violated]
 
   - id: etf_daily
     label: ETF日线
@@ -762,17 +779,38 @@ pipelines:
 
   - id: risk_scan_a
     label: A股风险扫描
-    job_status_key: risk_scan_a
+    # The task writes its records under task_type "risk_scan"; keying this on
+    # risk_scan_a matched nothing, so the pipeline looked like it never ran.
+    job_status_key: risk_scan
     group: layer1
     depends_on: [stock_daily, index_daily]
     trigger_on_complete: false
     run_mode: cron
     schedule_hint: "Supercronic 工作日 19:30 → daily_market_sync.sh risk_scan_a（9个A股板块）"
     freshness:
+      # Pointed at a collection named risk_scan that does not exist, so this
+      # showed as empty while the scan was healthy. Rows land in risk_reports
+      # keyed by scan_date (12 per trading day, one per sector).
       database: quant_data
-      collection: risk_scan
-      field: trade_date
+      collection: risk_reports
+      field: scan_date
       field_kind: date_string
+    contract:
+      # 12 rows per trading day, one per sector. Coverage is 100% back to
+      # 20260102; the sparser stretch before that predates the current cadence.
+      source: derived
+      depends_on: [stock_daily, index_daily]
+      storage: { database: quant_data, collection: risk_reports, date_field: scan_date }
+      window: { start: "20260102", end: rolling }
+      sla: { max_lag_trading_days: 2, min_coverage_pct: 99.0, min_symbols_latest_day: 0 }
+      on_violation:
+        auto_repair: true
+        repair_task: run_risk_scan
+        repair_args: ["--start", "{start}", "--end", "{end}"]
+        max_repair_window_days: 30
+      alert:
+        channels: [email, data_pulse]
+        "on": [repair_failed, still_violated]
 
   - id: market_breadth_daily
     label: A股每日广度原子指标
@@ -818,6 +856,23 @@ pipelines:
       collection: market_regime_reports
       field: scan_date
       field_kind: date_string
+    contract:
+      # Went silent from 20260728 because market_breadth_daily upstream had,
+      # and came back on its own once that was fixed. That gap has since been
+      # backfilled, putting coverage at 99.8%.
+      source: derived
+      depends_on: [market_breadth_daily, index_dailybasic]
+      storage: { database: quant_data, collection: market_regime_reports, date_field: scan_date }
+      window: { start: "20240102", end: rolling }
+      sla: { max_lag_trading_days: 2, min_coverage_pct: 99.0, min_symbols_latest_day: 0 }
+      on_violation:
+        auto_repair: true
+        repair_task: run_market_regime_scan
+        repair_args: ["--start", "{start}", "--end", "{end}"]
+        max_repair_window_days: 30
+      alert:
+        channels: [email, data_pulse]
+        "on": [repair_failed, still_violated]
 
   # ── Layer 2: Depends on Layer 1 ───────────────────────────────────────────────
 
@@ -848,6 +903,19 @@ pipelines:
       collection: stock_scores
       field: score_date
       field_kind: date_string
+    contract:
+      # Monitor-only: the scorer lives in stock-scoring-system, so this repo has
+      # no repair task to invoke. A violation here is a page, not a self-heal.
+      source: derived
+      depends_on: [stock_daily, moneyflow]
+      storage: { database: finance, collection: stock_scores, date_field: score_date }
+      window: { start: "20240102", end: rolling }
+      sla: { max_lag_trading_days: 2, min_coverage_pct: 99.0, min_symbols_latest_day: 0 }
+      on_violation:
+        auto_repair: false
+      alert:
+        channels: [email, data_pulse]
+        "on": [still_violated]
 
   # ── Layer 3: Analysis layer (quantAnalyzer, depends on L2) ────────────────────
 
@@ -860,7 +928,10 @@ pipelines:
     run_mode: loop
     schedule_hint: "quantAnalyzer 常驻服务，polling analysis_tasks 集合；sector_queue 模式下实时触发"
     freshness:
+      # analysis_history does not exist. quantAnalyzer records these runs in
+      # analysis_tasks under task_type limit_up_sector_batch, which is also the
+      # queue it polls.
       database: finance
-      collection: analysis_history
+      collection: analysis_tasks
       field: created_at
       field_kind: datetime
