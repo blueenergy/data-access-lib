@@ -442,9 +442,12 @@ pipelines:
     run_mode: cron
     schedule_hint: "Supercronic 工作日 18:30 → daily_market_sync.sh earnings（季报期外大多空跑，保持 cron 独立）"
     freshness:
+      # Pointed at a collection that does not exist, so data-pulse showed this
+      # pipeline as empty. The rows live in earnings_forecast, keyed by ann_date
+      # — the same place the contract below reads.
       database: quant_data
-      collection: earnings
-      field: trade_date
+      collection: earnings_forecast
+      field: ann_date
       field_kind: date_string
     # ── Data contract (Phase 3, run-recency model) ─────────────────────────────
     # Earnings is announcement-driven and only partially disclosed, so coverage
@@ -558,6 +561,11 @@ pipelines:
         kind: run_recency
       sla:
         max_run_lag_days: 7
+        # run_recency alone read "ok" while the collection sat on 20260331 for
+        # 133 days: the job kept completing without pulling anything. Tushare
+        # had the 20260630 quarter available the whole time. One quarter plus a
+        # month of disclosure lag is the widest this should ever legitimately be.
+        max_data_lag_days: 120
       on_violation:
         auto_repair: true
         repair_task: run_hk_hold_sync
