@@ -760,7 +760,8 @@ pipelines:
       on_violation:
         auto_repair: true
         repair_task: analyze_market_sentiment
-        repair_args: ["--start", "{start}", "--end", "{end}"]
+        # analyze_market_sentiment requires --granularity; daily EOD writes market_spectrum
+        repair_args: ["--granularity", "daily", "--start", "{start}", "--end", "{end}"]
         max_repair_window_days: 30
       alert:
         channels: [webhook, data_pulse]
