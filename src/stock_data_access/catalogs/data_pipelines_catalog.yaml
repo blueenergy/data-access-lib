@@ -69,7 +69,7 @@ pipelines:
         repair_task: run_stock_info_sync
         repair_args: []         # 显式空参：run_stock_info_sync 自动探测最新交易日
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: stock_daily
@@ -116,7 +116,7 @@ pipelines:
         repair_mode: by-date
         max_repair_window_days: 30   # 单次回填最大日历跨度，限频护栏
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]   # quoted: bare `on` is YAML boolean True
 
   - id: stock_adj_factor
@@ -152,7 +152,7 @@ pipelines:
         repair_mode: by-date
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: a_daily_realtime_sync
@@ -235,7 +235,7 @@ pipelines:
         repair_args: ["--core", "--start", "{start}", "--end", "{end}"]
         max_repair_window_days: 60
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: index_constituents
@@ -280,7 +280,7 @@ pipelines:
         repair_args: ["--start", "{start}", "--end", "{end}"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: etf_daily
@@ -307,7 +307,7 @@ pipelines:
         repair_args: ["--all", "--start", "{start}", "--end", "{end}"]   # 全市场按日回填
         max_repair_window_days: 60
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: etf_share_size
@@ -337,7 +337,7 @@ pipelines:
         repair_args: ["--all", "--start", "{start}", "--end", "{end}"]
         max_repair_window_days: 90
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: financial_sync
@@ -393,7 +393,7 @@ pipelines:
         repair_args: ["--all", "--period-range", "{start}:{end}"]
         max_repair_window_days: 730   # group up to ~2y of quarter-ends per backfill
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: moneyflow
@@ -420,7 +420,7 @@ pipelines:
         repair_args: ["--start", "{start}", "--end", "{end}"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: nineturn_sync
@@ -447,7 +447,7 @@ pipelines:
         repair_args: ["--start", "{start}", "--end", "{end}"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: earnings_sync
@@ -484,7 +484,7 @@ pipelines:
         repair_args: ["--days", "7"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: stk_holdernumber_sync
@@ -518,7 +518,7 @@ pipelines:
         repair_args: ["--days", "120"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: shareholder_event_sync
@@ -551,7 +551,7 @@ pipelines:
         repair_args: ["--days", "7"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: hk_hold_sync
@@ -589,7 +589,7 @@ pipelines:
         repair_args: ["--recent-quarters", "2"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: institutional_deep_sync
@@ -624,7 +624,7 @@ pipelines:
         repair_args: ["--from-stock-info", "--stale-days", "30", "--limit", "300", "--no-analysis", "--brief"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: cn_macro_sync
@@ -763,7 +763,7 @@ pipelines:
         repair_args: ["--start", "{start}", "--end", "{end}"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: theme_lag_candidates
@@ -812,7 +812,7 @@ pipelines:
         repair_args: ["--start", "{start}", "--end", "{end}"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: market_breadth_daily
@@ -843,7 +843,7 @@ pipelines:
         repair_args: ["--start", "{start}", "--end", "{end}"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   - id: market_regime_scan
@@ -874,7 +874,7 @@ pipelines:
         repair_args: ["--start", "{start}", "--end", "{end}"]
         max_repair_window_days: 30
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
   # ── Layer 2: Depends on Layer 1 ───────────────────────────────────────────────
@@ -917,7 +917,7 @@ pipelines:
       on_violation:
         auto_repair: false
       alert:
-        channels: [email, data_pulse]
+        channels: [webhook, data_pulse]
         "on": [still_violated]
 
   # ── Layer 3: Analysis layer (quantAnalyzer, depends on L2) ────────────────────
