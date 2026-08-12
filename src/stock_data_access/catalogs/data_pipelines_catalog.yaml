@@ -673,16 +673,19 @@ pipelines:
       field_kind: date_string
 
   - id: industry_sync
-    label: 行业与ETF聚合
+    label: 行业涨停聚合
     job_status_key: industry_sync
+    # 曾兼做行业/ETF 行情采集，数据源走 Baostock；该链路登录长期失败、两个产出
+    # 集合始终为空，而 ETF 行情 Tushare 侧已有完整通路，故整条采集路径已移除。
+    # 现在只做涨停统计聚合。
     group: layer0
-    depends_on: []
+    depends_on: [ladder_sync]
     trigger_on_complete: false
     run_mode: loop
-    schedule_hint: "start.sh：DEPLOY_MODE=domestic 或 full 时常驻 run_industry_sync --loop（INDUSTRY_SYNC_INTERVAL，默认 3600s）；盘后 15:30+ 才跑同步；不在 crontab 中"
+    schedule_hint: "start.sh：DEPLOY_MODE=domestic 或 full 时常驻 run_industry_sync --loop（INDUSTRY_SYNC_INTERVAL，默认 3600s）；盘后 15:30+ 才跑聚合；不在 crontab 中"
     freshness:
       database: quant_data
-      collection: market_industry_quotes_daily
+      collection: industry_limitup_stats
       field: date
       field_kind: date_string
 
