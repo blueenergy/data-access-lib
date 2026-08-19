@@ -761,7 +761,8 @@ pipelines:
         auto_repair: true
         repair_task: analyze_market_sentiment
         # analyze_market_sentiment requires --granularity; daily EOD writes market_spectrum
-        repair_args: ["--granularity", "daily", "--start", "{start}", "--end", "{end}"]
+        # Persist both short (MA5) and medium (MA30) breadth series for the UI switcher.
+        repair_args: ["--granularity", "daily", "--start", "{start}", "--end", "{end}", "--ma-periods", "5,30"]
         max_repair_window_days: 30
       alert:
         channels: [webhook, data_pulse]
