@@ -311,6 +311,35 @@ pipelines:
         channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
+  - id: market_pe_aggregate
+    label: 全A谐波市盈率
+    job_status_key: market_pe_aggregate
+    group: layer1
+    depends_on: [stock_daily]
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 工作日 19:35 → daily_market_sync.sh market_pe_aggregate（沪深盈利股市值加权谐波 PE）"
+    freshness:
+      database: quant_data
+      collection: market_pe_daily
+      field: trade_date
+      field_kind: date_string
+      filter: { ts_code: "ALLA.WI" }
+    contract:
+      source: derived
+      depends_on: [stock_daily]
+      storage: { database: quant_data, collection: market_pe_daily, date_field: trade_date }
+      window: { start: "20100101", end: rolling }
+      sla: { max_lag_trading_days: 2, min_coverage_pct: 95.0, min_symbols_latest_day: 0 }
+      on_violation:
+        auto_repair: true
+        repair_task: run_market_pe_aggregate
+        repair_args: ["--start", "{start}", "--end", "{end}"]
+        max_repair_window_days: 30
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [repair_failed, still_violated]
+
   - id: etf_daily
     label: ETF日线
     job_status_key: etf_daily
