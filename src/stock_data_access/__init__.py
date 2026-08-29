@@ -15,7 +15,7 @@ from .index_constituents import (
 	load_snapshot,
 	snapshot_symbol_filter,
 )
-from .calendar import get_trading_dates
+from .calendar import get_market_trading_dates, get_trading_dates
 from .pipeline_catalog import (
 	CATALOG_ENV_VAR,
 	catalog_path,
@@ -92,6 +92,7 @@ __all__ = [
 	"load_snapshot",
 	"snapshot_symbol_filter",
 	"get_trading_dates",
+	"get_market_trading_dates",
 	"CATALOG_ENV_VAR",
 	"catalog_path",
 	"load_pipeline_catalog",

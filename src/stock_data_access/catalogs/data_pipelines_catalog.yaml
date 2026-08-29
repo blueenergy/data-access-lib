@@ -397,6 +397,72 @@ pipelines:
         channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
+  - id: fund_basic
+    label: 公募基金基础信息
+    job_status_key: fund_basic
+    group: layer0
+    depends_on: []
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 周日 19:20 → daily_market_sync.sh fund_basic（全市场 fund_basic，含场外主动基金）"
+    freshness:
+      database: finance
+      collection: job_status
+      field: completed_at
+      field_kind: datetime
+      filter: { job_type: fund_basic }
+    contract:
+      source: tushare
+      storage:
+        database: quant_data
+        collection: fund_basic
+      completeness:
+        kind: snapshot
+        min_docs: 8000
+      window:
+        start: "20100101"
+        end: rolling
+      sla: {}
+      on_violation:
+        auto_repair: true
+        repair_task: run_fund_basic_sync
+        repair_args: []
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [repair_failed, still_violated]
+
+  - id: fund_portfolio
+    label: 公募基金持仓
+    job_status_key: fund_portfolio
+    group: layer0
+    depends_on: []
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 周日 19:00 → daily_market_sync.sh fund_portfolio；回补用 --period YYYYMMDD"
+    freshness:
+      database: finance
+      collection: job_status
+      field: completed_at
+      field_kind: datetime
+      filter: { job_type: fund_portfolio }
+    contract:
+      source: tushare
+      storage:
+        database: quant_data
+        collection: fund_holdings
+      completeness:
+        kind: snapshot
+        min_docs: 10000
+      window:
+        start: "20100101"
+        end: rolling
+      sla: {}
+      on_violation:
+        auto_repair: false
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [still_violated]
+
   - id: financial_sync
     label: 财务数据
     job_status_key: financial_sync
@@ -645,6 +711,178 @@ pipelines:
         repair_task: run_hk_hold_sync
         repair_args: ["--recent-quarters", "2"]
         max_repair_window_days: 30
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [repair_failed, still_violated]
+
+  # ── HK / US equity (own collections; do not mix into A-share tables) ────────
+  # Probe 2026-08-29: hk_basic / hk_tradecal / hk_daily / us_basic / us_tradecal
+  # 可用。hk_daily_adj、us_daily、us_daily_adj 当前 token 无权限，未进 cron。
+  # hk_daily 实测约 1 次/小时，日更只拉最近 1 个港股交易日。
+
+  - id: hk_basic
+    label: 港股列表
+    job_status_key: hk_basic
+    group: layer0
+    depends_on: []
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 工作日 18:20 → daily_market_sync.sh hk_basic"
+    freshness:
+      database: finance
+      collection: job_status
+      field: completed_at
+      field_kind: datetime
+      filter: { job_type: hk_basic }
+    contract:
+      source: tushare
+      storage:
+        database: quant_data
+        collection: hk_stock_info
+      completeness:
+        kind: snapshot
+        min_docs: 2500
+      window:
+        start: "20100101"
+        end: rolling
+      sla: {}
+      on_violation:
+        auto_repair: true
+        repair_task: run_overseas_equity_sync
+        repair_args: ["--market", "hk", "--dataset", "basic"]
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [repair_failed, still_violated]
+
+  - id: hk_tradecal
+    label: 港股交易日历
+    job_status_key: hk_tradecal
+    group: layer0
+    depends_on: []
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 周日 18:10 → daily_market_sync.sh hk_tradecal"
+    freshness:
+      database: finance
+      collection: job_status
+      field: completed_at
+      field_kind: datetime
+      filter: { job_type: hk_tradecal }
+    contract:
+      source: tushare
+      storage:
+        database: quant_data
+        collection: hk_trade_calendar
+      completeness:
+        kind: snapshot
+        min_docs: 2000
+      window:
+        start: "20200101"
+        end: rolling
+      sla: {}
+      on_violation:
+        auto_repair: true
+        repair_task: run_overseas_equity_sync
+        repair_args: ["--market", "hk", "--dataset", "tradecal"]
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [repair_failed, still_violated]
+
+  - id: hk_daily
+    label: 港股日线
+    job_status_key: hk_daily
+    group: layer0
+    depends_on: []
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 工作日 19:05 → daily_market_sync.sh hk_daily（Tushare 约 18:00 更新；当前 token ~1次/小时）"
+    freshness:
+      database: quant_data
+      collection: hk_volume_price
+      field: trade_date
+      field_kind: date_string
+    contract:
+      source: tushare
+      storage: { database: quant_data, collection: hk_volume_price, date_field: trade_date, symbol_field: symbol }
+      window: { start: "20200101", end: rolling }
+      completeness:
+        kind: run_recency
+      sla:
+        max_run_lag_days: 3
+        max_data_lag_days: 5
+      on_violation:
+        auto_repair: true
+        repair_task: run_overseas_equity_sync
+        repair_args: ["--market", "hk", "--dataset", "daily", "--days", "1"]
+        max_repair_window_days: 3
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [repair_failed, still_violated]
+
+  - id: us_basic
+    label: 美股列表
+    job_status_key: us_basic
+    group: layer0
+    depends_on: []
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 工作日 06:40 → daily_market_sync.sh us_basic"
+    freshness:
+      database: finance
+      collection: job_status
+      field: completed_at
+      field_kind: datetime
+      filter: { job_type: us_basic }
+    contract:
+      source: tushare
+      storage:
+        database: quant_data
+        collection: us_stock_info
+      completeness:
+        kind: snapshot
+        min_docs: 20000
+      window:
+        start: "20100101"
+        end: rolling
+      sla: {}
+      on_violation:
+        auto_repair: true
+        repair_task: run_overseas_equity_sync
+        repair_args: ["--market", "us", "--dataset", "basic"]
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [repair_failed, still_violated]
+
+  - id: us_tradecal
+    label: 美股交易日历
+    job_status_key: us_tradecal
+    group: layer0
+    depends_on: []
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 周日 06:45 → daily_market_sync.sh us_tradecal"
+    freshness:
+      database: finance
+      collection: job_status
+      field: completed_at
+      field_kind: datetime
+      filter: { job_type: us_tradecal }
+    contract:
+      source: tushare
+      storage:
+        database: quant_data
+        collection: us_trade_calendar
+      completeness:
+        kind: snapshot
+        min_docs: 2000
+      window:
+        start: "20200101"
+        end: rolling
+      sla: {}
+      on_violation:
+        auto_repair: true
+        repair_task: run_overseas_equity_sync
+        repair_args: ["--market", "us", "--dataset", "tradecal"]
       alert:
         channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
@@ -980,6 +1218,41 @@ pipelines:
         "on": [still_violated]
 
   # ── Layer 3: Analysis layer (quantAnalyzer, depends on L2) ────────────────────
+
+  - id: fund_inventory
+    label: 主动公募库存四态
+    job_status_key: fund_inventory
+    group: layer3
+    depends_on: [fund_portfolio, fund_basic, stock_daily]
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 周日 20:00 → daily_market_sync.sh fund_inventory（剥股价后四态快照）"
+    freshness:
+      database: finance
+      collection: job_status
+      field: completed_at
+      field_kind: datetime
+      filter: { job_type: fund_inventory }
+    contract:
+      source: derived
+      depends_on: [fund_portfolio, fund_basic, stock_daily]
+      storage:
+        database: quant_data
+        collection: fund_inventory_snapshots
+      completeness:
+        kind: snapshot
+        min_docs: 100
+      window:
+        start: "20100101"
+        end: rolling
+      sla: {}
+      on_violation:
+        auto_repair: true
+        repair_task: run_fund_inventory_snapshot
+        repair_args: []
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [repair_failed, still_violated]
 
   - id: limit_up_sector_batch
     label: 涨停板板块分析
