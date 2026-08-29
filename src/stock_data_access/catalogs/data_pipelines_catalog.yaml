@@ -450,11 +450,18 @@ pipelines:
       storage:
         database: quant_data
         collection: fund_holdings
+        date_field: end_date
+        symbol_field: ts_code
       completeness:
-        kind: snapshot
-        min_docs: 10000
+        kind: report_periods
+        per_period_min_coverage_pct: 60.0
+        universe:
+          database: quant_data
+          collection: fund_basic
+          match_key: ts_code
+          list_date_field: list_date
       window:
-        start: "20100101"
+        start: "20251231"
         end: rolling
       sla: {}
       on_violation:
@@ -1223,7 +1230,7 @@ pipelines:
     label: 主动公募库存四态
     job_status_key: fund_inventory
     group: layer3
-    depends_on: [fund_portfolio, fund_basic, stock_daily]
+    depends_on: [fund_portfolio, fund_basic, stock_daily, stock_adj_factor]
     trigger_on_complete: false
     run_mode: cron
     schedule_hint: "Supercronic 周日 20:00 → daily_market_sync.sh fund_inventory（剥股价后四态快照）"
@@ -1235,17 +1242,18 @@ pipelines:
       filter: { job_type: fund_inventory }
     contract:
       source: derived
-      depends_on: [fund_portfolio, fund_basic, stock_daily]
+      depends_on: [fund_portfolio, fund_basic, stock_daily, stock_adj_factor]
       storage:
         database: quant_data
         collection: fund_inventory_snapshots
+        date_field: updated_at
       completeness:
-        kind: snapshot
-        min_docs: 100
+        kind: run_recency
       window:
         start: "20100101"
         end: rolling
-      sla: {}
+      sla:
+        max_run_lag_days: 8
       on_violation:
         auto_repair: true
         repair_task: run_fund_inventory_snapshot
