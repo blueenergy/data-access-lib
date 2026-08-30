@@ -1262,6 +1262,42 @@ pipelines:
         channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
+  - id: fund_copywork
+    label: 公募抄作业快照
+    job_status_key: fund_copywork
+    group: layer3
+    depends_on: [fund_portfolio, fund_basic]
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 周日 20:15 → daily_market_sync.sh fund_copywork"
+    freshness:
+      database: finance
+      collection: job_status
+      field: completed_at
+      field_kind: datetime
+      filter: { job_type: fund_copywork }
+    contract:
+      source: derived
+      depends_on: [fund_portfolio, fund_basic]
+      storage:
+        database: quant_data
+        collection: fund_copywork_meta
+        date_field: updated_at
+      completeness:
+        kind: run_recency
+      window:
+        start: "20100101"
+        end: rolling
+      sla:
+        max_run_lag_days: 8
+      on_violation:
+        auto_repair: true
+        repair_task: run_fund_copywork_snapshot
+        repair_args: []
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [repair_failed, still_violated]
+
   - id: limit_up_sector_batch
     label: 涨停板板块分析
     job_status_key: limit_up_sector_batch
