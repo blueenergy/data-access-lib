@@ -76,6 +76,16 @@ from .evidence_fingerprint import (
 	normalize_title,
 	normalize_url,
 )
+from .score_utils import (
+	DEFAULT_WEIGHTED_SCORE_WEIGHTS,
+	SCORE_DIMENSION_FIELDS,
+	extract_strategy_score,
+	parse_score_weights,
+	safe_float,
+	safe_round,
+	safe_round_or_none,
+	weighted_dimension_score,
+)
 
 __all__ = [
 	"StockPriceDataAccess",
@@ -137,4 +147,12 @@ __all__ = [
 	"normalize_date",
 	"normalize_title",
 	"normalize_url",
+	"DEFAULT_WEIGHTED_SCORE_WEIGHTS",
+	"SCORE_DIMENSION_FIELDS",
+	"extract_strategy_score",
+	"parse_score_weights",
+	"safe_float",
+	"safe_round",
+	"safe_round_or_none",
+	"weighted_dimension_score",
 ]
