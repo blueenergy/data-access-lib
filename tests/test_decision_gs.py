@@ -72,6 +72,32 @@ def test_partial_bar_never_emits_signal():
     assert partial[signal_idx]["mj20"] is not None
 
 
+def test_sharp_drop_emits_s_watch_before_official_s():
+    up = [40 + i * 0.8 for i in range(90)]
+    down = [112 - i * 1.5 for i in range(40)]
+    result = compute_decision_gs(_n_bars(130, up + down))
+    watch_idx = [i for i, row in enumerate(result) if row["watch"] == "s"]
+    s_idx = [i for i, row in enumerate(result) if row["signal"] == "s"]
+    assert watch_idx, "expected s_watch after close breaks mj20"
+    assert s_idx, "expected official S after the slope turn"
+    assert min(watch_idx) < min(s_idx)
+    assert all(result[i]["signal"] is None for i in watch_idx)
+    assert all(result[i]["watch"] is None for i in s_idx)
+    assert all(result[i]["is_bull"] is True for i in watch_idx)
+
+
+def test_partial_bar_never_emits_s_watch():
+    up = [40 + i * 0.8 for i in range(90)]
+    down = [112 - i * 1.5 for i in range(40)]
+    bars = _n_bars(130, up + down)
+    full = compute_decision_gs(bars)
+    watch_idx = next(i for i, row in enumerate(full) if row["watch"] == "s")
+    bars[watch_idx]["is_partial"] = True
+    partial = compute_decision_gs(bars)
+    assert partial[watch_idx]["watch"] is None
+    assert partial[watch_idx]["mj20"] is not None
+
+
 def test_attach_preserves_newest_first_order():
     bars = _n_bars(120, [50 + i * 0.1 for i in range(120)])
     newest_first = list(reversed(bars))
@@ -80,6 +106,7 @@ def test_attach_preserves_newest_first_order():
     assert attached[0]["gs_formula_id"] == FORMULA_ID
     assert "mj20" in attached[0]
     assert "gs_signal" in attached[0]
+    assert "gs_watch" in attached[0]
 
 
 def test_empty_input():

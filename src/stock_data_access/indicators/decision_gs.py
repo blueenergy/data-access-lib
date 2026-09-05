@@ -4,8 +4,12 @@ This is **not** the closed-source 决策先锋 formula. v1 is a published, causa
 skeleton: weighted typical price → EMA(39)/EMA(99) → slope-turn G/S.
 
 Signals are events on *closed* bars only. Partial / in-progress bars still
-receive overlay values but never emit G or S, so historical marks do not
-repaint when later bars arrive.
+receive overlay values but never emit G, S, or ``s_watch``, so historical
+marks do not repaint when later bars arrive.
+
+``s_watch`` is an early warning, not a replacement for S: close is already
+below ``mj20`` while the ``mj20`` slope has not turned negative yet. Official
+S still requires the slope turn.
 """
 from __future__ import annotations
 
@@ -99,7 +103,8 @@ def compute_decision_gs(
 
     ``bars`` must already be chronological (oldest first). G/S require
     ``mj30_span`` bars of warmup plus a defined slope turn, and are suppressed
-    when ``is_partial`` is true.
+    when ``is_partial`` is true. ``watch='s'`` can fire earlier: close below
+    ``mj20`` while slope is still non-negative in a bull overlay.
     """
     rows = list(bars)
     jcx = [typical_price(row) for row in rows]
@@ -132,18 +137,21 @@ def compute_decision_gs(
             is_bull = line20 >= line30
 
         signal: Optional[str] = None
-        if (
+        watch: Optional[str] = None
+        closed_ready = (
             warmed
             and not is_partial
             and close is not None
             and line20 is not None
             and slope is not None
-            and prev_slope is not None
-        ):
+        )
+        if closed_ready and prev_slope is not None:
             if slope > 0 and prev_slope <= 0 and close > line20:
                 signal = "g"
             elif slope < 0 and prev_slope >= 0 and close < line20:
                 signal = "s"
+        if closed_ready and is_bull is True and close < line20 and slope >= 0:
+            watch = "s"
 
         out.append(
             {
@@ -154,6 +162,7 @@ def compute_decision_gs(
                 "slope": slope,
                 "is_bull": is_bull,
                 "signal": signal,
+                "watch": watch,
                 "warmup": not warmed,
                 "formula_id": formula_id,
             }
@@ -187,6 +196,7 @@ def attach_decision_gs(
         merged["mj30"] = extra.get("mj30")
         merged["gs_is_bull"] = extra.get("is_bull")
         merged["gs_signal"] = extra.get("signal")
+        merged["gs_watch"] = extra.get("watch")
         merged["gs_warmup"] = extra.get("warmup")
         merged["gs_formula_id"] = extra.get("formula_id")
         attached.append(merged)
