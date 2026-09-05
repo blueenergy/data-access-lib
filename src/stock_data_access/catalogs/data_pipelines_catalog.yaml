@@ -238,6 +238,33 @@ pipelines:
         channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
+  - id: fut_daily
+    label: 期货主力日线
+    job_status_key: fut_daily
+    group: layer0
+    depends_on: [tushare_daily_ready]
+    trigger_on_complete: true
+    run_mode: cron
+    schedule_hint: "dispatcher-triggered after tushare_daily_ready（daily_market_sync.sh fut）"
+    freshness:
+      database: quant_data
+      collection: fut_daily
+      field: trade_date
+      field_kind: date_string
+    contract:
+      source: tushare
+      storage: { database: quant_data, collection: fut_daily, date_field: trade_date, symbol_field: ts_code }
+      window: { start: "20100101", end: rolling }
+      sla: { max_lag_trading_days: 1, min_coverage_pct: 95.0, min_symbols_latest_day: 16 }
+      on_violation:
+        auto_repair: true
+        repair_task: run_fut_daily
+        repair_args: ["--core", "--start", "{start}", "--end", "{end}"]
+        max_repair_window_days: 60
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [repair_failed, still_violated]
+
   - id: index_constituents
     label: 指数成分股
     job_status_key: index_constituents
