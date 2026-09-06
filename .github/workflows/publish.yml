@@ -25,3 +25,15 @@ jobs:
         run: |
           python -m pip install twine
           python -m twine upload dist/*
+
+  notify-dingtalk:
+    name: Notify DingTalk on failure
+    if: ${{ always() && contains(needs.*.result, 'failure') }}
+    needs: [build-and-publish]
+    uses: blueenergy/quant-infrastructure/.github/workflows/notify-dingtalk.yml@main
+    secrets:
+      DATA_CONTRACT_WEBHOOK_URL: ${{ secrets.DATA_CONTRACT_WEBHOOK_URL }}
+      DATA_CONTRACT_WEBHOOK_SECRET: ${{ secrets.DATA_CONTRACT_WEBHOOK_SECRET }}
+    with:
+      workflow: ${{ github.workflow }}
+      needs_json: ${{ toJSON(needs) }}
