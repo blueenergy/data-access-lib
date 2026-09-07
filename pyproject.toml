@@ -26,6 +26,9 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/blueenergy/data-access-lib"
 
+[project.optional-dependencies]
+test = ["pytest", "flake8", "mongomock"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
