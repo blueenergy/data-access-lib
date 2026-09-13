@@ -86,6 +86,13 @@ from .score_utils import (
 	safe_round_or_none,
 	weighted_dimension_score,
 )
+from .score_query import (
+	apply_score_scope,
+	merge_score_scope,
+	row_covers_score_scope,
+	score_scope_filter,
+	tagged_index_codes_filter,
+)
 
 __all__ = [
 	"StockPriceDataAccess",
@@ -155,4 +162,9 @@ __all__ = [
 	"safe_round",
 	"safe_round_or_none",
 	"weighted_dimension_score",
+	"apply_score_scope",
+	"merge_score_scope",
+	"row_covers_score_scope",
+	"score_scope_filter",
+	"tagged_index_codes_filter",
 ]
