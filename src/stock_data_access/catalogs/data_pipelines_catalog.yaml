@@ -424,6 +424,57 @@ pipelines:
         channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
+  # 与 etf_share_size 是两个不同的集合，别混：etf_share_size ← Tushare etf_share_size
+  # 接口（仅场内 ETF，2020 起，带 total_size/etf_name）；本条目 ← fund_share 接口，
+  # 范围更宽（含 REITs、场外 .OF，2007 起），是 run_etf_daily 的副产品。
+  - id: etf_shares
+    label: ETF份额（fund_share）
+    job_status_key: etf_daily
+    group: layer0
+    depends_on: []            # 由 etf_daily 顺带写入，不单独调度
+    trigger_on_complete: false   # 必须 false：dispatcher 只挑 trigger_on_complete 的条目，
+                                 # 设 true 会去调度一个并不存在的独立任务
+    run_mode: cron
+    schedule_hint: "run_etf_daily 副产品（同任务写 etf_daily/etf_adj_factor/etf_shares）"
+    freshness:
+      database: quant_data
+      collection: etf_shares
+      field: trade_date
+      field_kind: date_string
+    # ── Data contract ─────────────────────────────────────────────────────────
+    # 只监控「沪市那一半」。沪市 fund_share 当晚 23:00 后才由 Tushare 发布，而写入
+    # 任务 16:10 就被 dispatcher 触发 —— 所以每天最新一天天生只有深市。用 market
+    # 过滤后判据变成「这一天有没有沪市」，正是 2026 年静默两个月的那个缺口
+    # （47/181 个交易日缺沪市，约 4.9 万行，无任何监控）。
+    # 两个判据各管一段，都靠现成字段，没有新增 SLA 概念：
+    #   max_lag_trading_days —— 沪市整体停写（latest_actual 会一路后退）
+    #   min_coverage_pct     —— 散点缺失（最新一天恒缺，故 99.0 只剩 1 天余量，
+    #                           多缺 1 天即触发；长假边界正落在这一档）
+    #   min_symbols_latest_day —— 沪市只写了零星几只（当天有行但远不够数）
+    contract:
+      source: tushare
+      storage:
+        database: quant_data
+        collection: etf_shares
+        date_field: trade_date
+        symbol_field: ts_code
+        source_field: market
+        source_include: ["SH"]
+      window: { start: "20260101", end: rolling }   # 2026 起沪市 181 天零缺失
+      sla: { max_lag_trading_days: 1, min_coverage_pct: 99.0, min_symbols_latest_day: 500 }
+      on_violation:
+        # auto_repair 必须关：最新一天结构性缺沪市 → 每晚都会判 missing → 触发 repair
+        # → consecutive_repairs 逐日累加 → 撞上 repair_streak_alert（该分支不受
+        # alert.on 白名单约束）→ 每晚误告警。修复仍走 run_etf_daily 的 3 天回看窗口
+        # （daily_market_sync.sh，28ec273），这里只负责把话说出来。
+        auto_repair: false
+        repair_task: run_etf_daily
+        repair_args: ["--all", "--start", "{start}", "--end", "{end}"]
+        max_repair_window_days: 60
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [still_violated]
+
   - id: fund_basic
     label: 公募基金基础信息
     job_status_key: fund_basic
