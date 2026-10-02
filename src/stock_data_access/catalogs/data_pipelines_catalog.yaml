@@ -327,7 +327,10 @@ pipelines:
     contract:
       source: tushare
       storage: { database: quant_data, collection: margin_market_daily, date_field: trade_date }
-      window: { start: "20100101", end: rolling }
+      # 两融业务 20100331 才开闸，此前的交易日**永远不存在数据**。起点写 20100101 会让
+      # reconciler 每晚把 20100104-20100330 当缺口去补，命令 exit 0 / written 0 被判成
+      # "repaired"，累积到 repair_streak_alert（默认 3 次）误告警。
+      window: { start: "20100331", end: rolling }
       sla: { max_lag_trading_days: 2, min_coverage_pct: 95.0, min_symbols_latest_day: 0 }
       on_violation:
         auto_repair: true
