@@ -661,6 +661,33 @@ pipelines:
         channels: [webhook, data_pulse]
         "on": [repair_failed, still_violated]
 
+  - id: cyq_sync
+    label: 筹码分布
+    job_status_key: cyq_sync
+    group: layer0
+    depends_on: []
+    trigger_on_complete: false
+    run_mode: cron
+    schedule_hint: "Supercronic 工作日 21:35 → daily_market_sync.sh cyq（一日一调用全市场；Tushare 晚间更新）"
+    freshness:
+      database: quant_data
+      collection: cyq_perf
+      field: trade_date
+      field_kind: date_string
+    contract:
+      source: tushare
+      storage: { database: quant_data, collection: cyq_perf, date_field: trade_date, symbol_field: symbol }
+      window: { start: "20180102", end: rolling }
+      sla: { max_lag_trading_days: 2, min_coverage_pct: 99.0, min_symbols_latest_day: 0 }
+      on_violation:
+        auto_repair: true
+        repair_task: run_cyq_sync
+        repair_args: ["--start", "{start}", "--end", "{end}"]
+        max_repair_window_days: 30
+      alert:
+        channels: [webhook, data_pulse]
+        "on": [repair_failed, still_violated]
+
   - id: earnings_sync
     label: 业绩数据
     job_status_key: earnings_sync
