@@ -8,7 +8,7 @@ version = "0.2.32"
 description = "Shared data access library for stock systems (Mongo, env, DAOs, pipeline catalog)"
 authors = [{ name = "blueenergy" }]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
   "pandas>=2.0",
   "pymongo>=4.5",
