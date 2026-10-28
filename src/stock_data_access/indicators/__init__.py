@@ -8,6 +8,7 @@ from .intraday_resample import (
     normalize_intraday_tf,
     resample_ashare_intraday,
 )
+from .k import calculate_k_indicator
 from .nineturn import enrich_nineturn_signals, latest_signal_summary
 from .volatility import (
     abnormal_range_flag,
@@ -26,6 +27,7 @@ __all__ = [
     "SUPPORTED_INTRADAY_TF",
     "attach_decision_gs",
     "compute_decision_gs",
+    "calculate_k_indicator",
     "filter_bars_by_ymd",
     "normalize_intraday_tf",
     "resample_ashare_intraday",
